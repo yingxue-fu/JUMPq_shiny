@@ -2,7 +2,7 @@
 
 fluidPage(
   pageWithSidebar(
-    headerPanel("Visualization of JUMP quantification results"),
+    headerPanel("Analaysis and visualization of JUMP quantification results"),
     sidebarPanel(
       h2("About"),
       p("This tool draws a volcano plot- typically used for showing relationships between fold change and p-values of genes (probes) in microarray studies.",
@@ -18,8 +18,7 @@ fluidPage(
       tabsetPanel(
         tabPanel("Select samples for each group", 
                 uiOutput("sampleGroups"), 
-                actionButton("submitGroups", "Update"),
-                verbatimTextOutput("selectedSamples")),
+                actionButton("submitGroups", "Update")),
         tabPanel("Volcano Plot", plotOutput(outputId = 'volcano', width = "800px", height = "800px")),
         tabPanel("Histogram", plotOutput(outputId = 'histogram', width = "100%")),
         tabPanel("Data Preview", tableOutput("contents"))

@@ -4,7 +4,7 @@ library(readxl)
 function (input, output) {
   ## Load JUMP -q output file (either id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx)
   inputData = reactive({
-    inFile = "id_uni_prot_quan.xlsx"
+    inFile = input$inputFile
     if (length(grep("pep", inFile))) {
       tbl = read_excel(inFile, skip = 4) # Peptide publication table
     } else {
