@@ -3,26 +3,29 @@ library(readxl)
 
 function (input, output) {
   ## Load JUMP -q output file (either id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx)
-  inputData = reactive({
-    inFile = input$inputFile
-    if (length(grep("pep", inFile))) {
-      tbl = read_excel(inFile, skip = 4) # Peptide publication table
+  inFile = reactive(input$inputFile)
+  inputData = eventReactive(inFile(), {
+    inFileName = inFile()$name
+    if (length(grep("pep", inFileName))) {
+      tbl = read_excel(inFileName, skip = 4) # Peptide publication table
     } else {
-      tbl = read_excel(inFile, skip = 1) # Protein publication table
+      tbl = read_excel(inFileName, skip = 1) # Protein publication table
     }
     df = as.data.frame(tbl)
   })
-  
+
   ## Specificiation of sample groups
-  inputNumberGroups = reactive(as.integer(input$nGroups))
-  output$sampleGroups = renderUI({
-    nGroups = inputNumberGroups()
-    data = inputData()
-    colSampleNames = grep('sig', colnames(data))
-    sampleNames = colnames(data)[colSampleNames]
-    lapply (1:nGroups, function(i) {
-      checkboxGroupInput(inputId = paste0("Group", i), label = paste("Group", i),
-                         choiceNames = as.list(sampleNames), choiceValues = as.list(sampleNames))
+  observeEvent(is.null(input$inputFile), {
+    inputNumberGroups = reactive(as.integer(input$nGroups))
+    output$sampleGroups = renderUI({
+      nGroups = inputNumberGroups()
+      data = inputData()
+      colSampleNames = grep('sig', colnames(data))
+      sampleNames = colnames(data)[colSampleNames]
+      lapply (1:nGroups, function(i) {
+        checkboxGroupInput(inputId = paste0("Group", i), label = paste("Group", i),
+                           choiceNames = as.list(sampleNames), choiceValues = as.list(sampleNames))
+      })
     })
   })
   
@@ -64,7 +67,6 @@ function (input, output) {
       newColNames = c(newColNames, paste(comparison[combMatrix[1, j]], "/", comparison[combMatrix[2, j]], sep = ""))
     }
     contMatrix = makeContrasts(contrasts = contVec, levels = design)
-
   })
   
   # output$selectedSamples = renderText({
@@ -76,9 +78,5 @@ function (input, output) {
   #   icons <- paste(input$icons, collapse = ", ")
   #   paste("You chose", icons)
   # })
-  
-  output$selectedSamples = renderPrint({
-    # data = DE()
-  })
-  
+
 }
