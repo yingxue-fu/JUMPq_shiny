@@ -115,23 +115,23 @@ statTest = function (data, level, comparison) {
   return (res)
 }
 
-##################
-## Main routine ##
-##################
-inFile = "id_uni_prot_quan.xlsx"
-if (length(grep("pep", inFile))) {
-  tbl = read_excel(inFile, skip = 4) # Peptide publication table
-} else {
-  tbl = read_excel(inFile, skip = 1) # Protein publication table
-}
-data = as.data.frame(tbl)
-
-nGroups = 2
-# comparison = c("sig126 (S1_WT),sig127N (S2_WT),sig127C (S3_WT)", "sig128N (S4_Pants),sig128C (S5_Pants),sig129N (S6_Pants)")
-# comparison = c("sig126 (S1_WT)", "sig129N (S6_Pants)")
-comparison = c("sig126 (S1_WT),sig127N (S2_WT),sig127C (S3_WT)", 
-               "sig128N (S4_Pants),sig128C (S5_Pants),sig129N (S6_Pants)", 
-               "sig129C (T7_WT),sig130N (T8_WT),sig130C (T9_Pants),sig131 (T10_Pants)")
-level = "protein"
-res = statTest(data, level, comparison)
-cat("Done")
+# ##################
+# ## Main routine ##
+# ##################
+# inFile = "id_uni_prot_quan.xlsx"
+# if (length(grep("pep", inFile))) {
+#   tbl = read_excel(inFile, skip = 4) # Peptide publication table
+# } else {
+#   tbl = read_excel(inFile, skip = 1) # Protein publication table
+# }
+# data = as.data.frame(tbl)
+# 
+# nGroups = 2
+# # comparison = c("sig126 (S1_WT),sig127N (S2_WT),sig127C (S3_WT)", "sig128N (S4_Pants),sig128C (S5_Pants),sig129N (S6_Pants)")
+# # comparison = c("sig126 (S1_WT)", "sig129N (S6_Pants)")
+# comparison = c("sig126 (S1_WT),sig127N (S2_WT),sig127C (S3_WT)", 
+#                "sig128N (S4_Pants),sig128C (S5_Pants),sig129N (S6_Pants)", 
+#                "sig129C (T7_WT),sig130N (T8_WT),sig130C (T9_Pants),sig131 (T10_Pants)")
+# level = "protein"
+# res = statTest(data, level, comparison)
+# cat("Done")
