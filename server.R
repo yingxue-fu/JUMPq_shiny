@@ -1,12 +1,13 @@
 ## server.R
 library(readxl)
 library(ggplot2)
+library(pheatmap)
 source("R/statTest.R")
 
 function (input, output) {
   ## Load JUMP -q output file (either id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx)
-  inputData = eventReactive(input$inputFile, {
-    inFileName = input$inputFile$name
+  inputData = eventReactive(input$expSubmit, {
+    inFileName = input$expFile$name
     if (length(grep("pep", inFileName))) {
       tbl = read_excel(inFileName, skip = 4) # Peptide publication table
       level = "peptide"
@@ -14,29 +15,51 @@ function (input, output) {
       tbl = read_excel(inFileName, skip = 1) # Protein publication table
       level = "protein"
     }
+    
+    ## Selection of a subset of data according to input parameters
     list(data = as.data.frame(tbl), level = level)
   })
 
+  ## Selection of a subset of data according to input parameters
+  subData = eventReactive(input$expSubmit, {
+    ## Data reduction
+    rawData = inputData()$data
+    level = inputData()$level
+    if (level == "peptide") {
+      entry = rawData[, 1]
+    } else if (level == "protein") {
+      entry = rawData[, 2]
+    }
+    
+    ## Definition of a dataset (only includes TMT reporter intensities)
+    ## Hereafter, the data is log2-transformed
+    colInd = grep("sig", colnames(rawData))
+    data = log(rawData[, colInd], 2)
+    rownames(data) = entry
+    
+    ## Selection of a subset of data
+    cv = apply(data, 1, sd) / rowMeans(data)
+    mad = apply(abs(data - apply(data, 1, median)), 1, median)
+    threshold = as.numeric(input$expVariant)/ 100 ## Threshold percentage
+    if (as.numeric(input$expMetric) == 1) {
+      data[cv > quantile(cv, prob = 1 - threshold), ]
+    } else if (as.numeric(input$expMetric) == 2) {
+      data[mad > quantile(mad, prob = 1 - threshold), ]
+    }
+  })
+  
   ######################################################
   ## Unsupervised analysis, i.e. explorative analysis ##
   ######################################################
   ## PCA plot
+  output$pcaText = renderText({
+    if (input$expSubmit) {
+      "Principal component analysis (PCA) plot of samples"
+    }
+  })
   output$pcaPlot = renderPlot({
-    reactive(input$inputFile, {
-      ## Data reduction
-      rawData = inputData()$data
-      level = inputData()$level
-      if (level == "peptide") {
-        entry = rawData[, 1]
-      } else if (level == "protein") {
-        entry = rawData[, 2]
-      }
-      ## Definition of a dataset (only includes TMT reporter intensities)
-      ## Hereafter, the data is log2-transformed
-      colInd = grep("sig", colnames(rawData))
-      data = log(rawData[, colInd], 2)
-      rownames(data) = entry
-      
+    reactive(input$expSubmit, {
+      data = subData()
       ## Preparation of PCA result for visualization
       resPCA = prcomp(t(data), center = TRUE, scale = TRUE)
       eigs = resPCA$sdev ^ 2
@@ -49,20 +72,32 @@ function (input, output) {
       ratioValue = (max(resPCA$PC1) - min(resPCA$PC1)) / (max(resPCA$PC2) - min(resPCA$PC2))
       print(ggplot(data = resPCA[, 1:2], aes(PC1, PC2)) +
               geom_jitter(size = 3) +
-              geom_text(aes(label = rownames(resPCA)), vjust = "inward", hjust = "inward") +
+              geom_text(aes(label = rownames(resPCA)), vjust = "inward", hjust = "inward", size = 5) +
               labs(x = xlabPCA, y = ylabPCA) + 
-              coord_fixed(ratioValue / ratioDisplay))
+              coord_fixed(ratioValue / ratioDisplay) + 
+              theme(text = element_text(size = 12)))
     })
   })
-
   
-  
-  
-  
-  
-    
-  ## Heatmap of data (with hierarchical clustering)
-  
+  ## Hierarchical clustering of samples (heatmap)
+  output$hclustText = renderText({
+    if (input$expSubmit) {
+      "Hierarchical clustering result"
+    }
+  })
+  output$hclustPlot = renderPlot({
+    reactive(input$expSubmit, {
+      data = subData()
+      color <- colorRampPalette(c("blue", "white", "red"))(n = 100)
+      mat = as.matrix(data)
+      mat = t(scale(t(mat), center = T, scale = F)) # Only mean-centering
+      limVal = round(min(abs(min(mat)), abs(max(mat))))
+      matBreaks = seq(-limVal, limVal, length.out = 100)
+      pheatmap(mat = mat, color = color, breaks = matBreaks, show_rownames = F,
+               clustering_method = "ward.D", fontsize = 12)
+    })
+  })
+ 
 
   
   # ################################################################
