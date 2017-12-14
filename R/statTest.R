@@ -5,8 +5,9 @@ library(limma)
 ## Subroutines  ##
 ##################
 limmaTest <- function(data, level, samples, comparison, comparisonNames, design, contMatrix) {
+  subData = log(data[, which(colnames(data) %in% samples)], 2)
   nGroups = length(comparison)
-  fit = lmFit(log(data[, which(colnames(data) %in% samples)], 2), design) ## Log2-transformation
+  fit = lmFit(subData, design) ## Log2-transformation
   fit = contrasts.fit(fit, contMatrix)
   fit = eBayes(fit)
   if (level == "peptide") {
@@ -14,6 +15,7 @@ limmaTest <- function(data, level, samples, comparison, comparisonNames, design,
   } else if (level == "protein") {
     genelist = data[, 2]
   }
+  subData = cbind(genelist, subData)
   result = topTable(fit, genelist = genelist, n = nrow(data), sort = "none")
   ## Change column names of the result table
   if (nGroups == 2) {
@@ -32,7 +34,7 @@ limmaTest <- function(data, level, samples, comparison, comparisonNames, design,
   colnames(result)[which(names(result) == "adj.P.Value")] = "FDR"
   colnames(result)[which(names(result) == "adj.P.Val")] = "FDR"
   colnames(result)[1] = level
-  return (result)
+  return (list(res = result, data = subData))
 }
 
 ## From isobar package
@@ -118,20 +120,35 @@ statTest = function (data, level, comparison) {
 # ##################
 # ## Main routine ##
 # ##################
-# inFile = "id_uni_prot_quan.xlsx"
-# if (length(grep("pep", inFile))) {
-#   tbl = read_excel(inFile, skip = 4) # Peptide publication table
-# } else {
-#   tbl = read_excel(inFile, skip = 1) # Protein publication table
-# }
-# data = as.data.frame(tbl)
+inFile = "id_uni_prot_quan.xlsx"
+if (length(grep("pep", inFile))) {
+  tbl = read_excel(inFile, skip = 4) # Peptide publication table
+} else {
+  tbl = read_excel(inFile, skip = 1) # Protein publication table
+}
+data = as.data.frame(tbl)
+
+nGroups = 2
+# comparison = c("sig126 (S1_WT),sig127N (S2_WT),sig127C (S3_WT)", "sig128N (S4_Pants),sig128C (S5_Pants),sig129N (S6_Pants)")
+# comparison = c("sig126 (S1_WT)", "sig129N (S6_Pants)")
+comparison = c("sig126 (S1_WT),sig127N (S2_WT),sig127C (S3_WT)",
+               "sig128N (S4_Pants),sig128C (S5_Pants),sig129N (S6_Pants)",
+               "sig129C (T7_WT),sig130N (T8_WT),sig130C (T9_Pants),sig131 (T10_Pants)")
+level = "protein"
+res = statTest(data, level, comparison)
+
+
+logFC = 1
+sigMetric = "FDR"
+sigCutoff = 0.05
+
+resLogFC = res$res[, grep("Log2Fold", colnames(res$res))]
+# resLogFC = apply(cbind(abs(apply(resLogFC, 1, min)), abs(apply(resLogFC, 1, max))), 1, max)
 # 
-# nGroups = 2
-# # comparison = c("sig126 (S1_WT),sig127N (S2_WT),sig127C (S3_WT)", "sig128N (S4_Pants),sig128C (S5_Pants),sig129N (S6_Pants)")
-# # comparison = c("sig126 (S1_WT)", "sig129N (S6_Pants)")
-# comparison = c("sig126 (S1_WT),sig127N (S2_WT),sig127C (S3_WT)", 
-#                "sig128N (S4_Pants),sig128C (S5_Pants),sig129N (S6_Pants)", 
-#                "sig129C (T7_WT),sig130N (T8_WT),sig130C (T9_Pants),sig131 (T10_Pants)")
-# level = "protein"
-# res = statTest(data, level, comparison)
-# cat("Done")
+# rowInd = which(res$res[[sigMetric]] < sigCutoff & resLogFC >= logFC)
+# mat = as.matrix(res$data[rowInd, -1])
+# mat = t(scale(t(mat), center = T, scale = F)) # Only mean-centering
+# 
+# pheatmap(mat)
+
+

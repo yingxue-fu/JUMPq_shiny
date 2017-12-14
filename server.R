@@ -6,8 +6,8 @@ source("R/statTest.R")
 
 function (input, output) {
   ## Load JUMP -q output file (either id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx)
-  inputData = eventReactive(input$expSubmit, {
-    inFileName = input$expFile$name
+  expData = reactive ({
+    inFileName = input$inputFile$name
     if (length(grep("pep", inFileName))) {
       tbl = read_excel(inFileName, skip = 4) # Peptide publication table
       level = "peptide"
@@ -21,10 +21,10 @@ function (input, output) {
   })
 
   ## Selection of a subset of data according to input parameters
-  subData = eventReactive(input$expSubmit, {
+  subExpData = eventReactive(input$expSubmit, {
     ## Data reduction
-    rawData = inputData()$data
-    level = inputData()$level
+    rawData = expData()$data
+    level = expData()$level
     if (level == "peptide") {
       entry = rawData[, 1]
     } else if (level == "protein") {
@@ -59,7 +59,7 @@ function (input, output) {
   })
   output$pcaPlot = renderPlot({
     reactive(input$expSubmit, {
-      data = subData()
+      data = subExpData()
       ## Preparation of PCA result for visualization
       resPCA = prcomp(t(data), center = TRUE, scale = TRUE)
       eigs = resPCA$sdev ^ 2
@@ -87,7 +87,7 @@ function (input, output) {
   })
   output$hclustPlot = renderPlot({
     reactive(input$expSubmit, {
-      data = subData()
+      data = subExpData()
       color <- colorRampPalette(c("blue", "white", "red"))(n = 100)
       mat = as.matrix(data)
       mat = t(scale(t(mat), center = T, scale = F)) # Only mean-centering
@@ -97,53 +97,87 @@ function (input, output) {
                clustering_method = "ward.D", fontsize = 12)
     })
   })
- 
 
+  ################################################################
+  ## Supervised analysis, i.e. differential expression analysis ##
+  ################################################################
+  ## Load JUMP -q output file (either id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx)
+  diffData = reactive ({
+    inFileName = input$diffFile$name
+    if (length(grep("pep", inFileName))) {
+      tbl = read_excel(inFileName, skip = 4) # Peptide publication table
+      level = "peptide"
+    } else {
+      tbl = read_excel(inFileName, skip = 1) # Protein publication table
+      level = "protein"
+    }
+    
+    ## Selection of a subset of data according to input parameters
+    list(data = as.data.frame(tbl), level = level)
+  })
   
-  # ################################################################
-  # ## Supervised analysis, i.e. differential expression analysis ##
-  # ################################################################
-  # ## Specificiation of sample groups
-  # inputNumberGroups = reactive(as.integer(input$nGroups))
-  # observeEvent(input$inputFile, {
-  #     output$sampleGroups = renderUI({
-  #     nGroups = inputNumberGroups()
-  #     data = inputData()
-  #     colSampleNames = grep('sig', colnames(data))
-  #     sampleNames = colnames(data)[colSampleNames]
-  #     lapply (1:nGroups, function(i) {
-  #       checkboxGroupInput(inputId = paste0("Group", i), label = paste("Group", i),
-  #                          choiceNames = as.list(sampleNames), choiceValues = as.list(sampleNames))
-  #     })
-  #   })
-  # })
-  # 
-  # ## Differentially expressed peptides/proteins
-  # DE = eventReactive(input$submitGroups, {
-  #   inputFile = input$inputFile$name
-  #   level = NULL
-  #   if (length(grep("pep", inputFile))) {
-  #     level = "peptide"
-  #   } else if (length(grep("pro", inputFile))) {
-  #     level = "protein"
-  #   }
-  #   data = inputData()
-  #   nGroups = inputNumberGroups()
-  #   comparison = as.character()
-  #   compSamples = as.character()
-  #   for (g in 1:nGroups) {
-  #     groupName = paste0("Group", g)
-  #     comparison[g] = paste(input[[groupName]], collapse = ",")
-  #   }
-  #   groups = list()
-  #   compSamples = NULL
-  #   for (g in 1:nGroups) {
-  #     groups[[g]] = unlist(strsplit(comparison[g], ","))
-  #     compSamples = c(compSamples, groups[[g]])
-  #   }
-  #   res = statTest(data, level, comparison)
-  # })
-  # 
+  ## Specificiation of sample groups
+  diffNGroups = reactive(as.integer(input$diffNumGroups))
+  observeEvent(input$diffFile, {
+      output$diffGroups = renderUI({
+      nGroups = diffNGroups()
+      data = diffData()$data
+      colSampleNames = grep('sig', colnames(data))
+      sampleNames = colnames(data)[colSampleNames]
+      lapply (1:nGroups, function(i) {
+        checkboxGroupInput(inputId = paste0("Group", i), label = paste("Group", i),
+                           choiceNames = as.list(sampleNames), choiceValues = as.list(sampleNames))
+      })
+    })
+  })
+
+  ## Differentially expressed peptides/proteins
+  statRes = eventReactive(input$diffSubmit, {
+    data = diffData()$data
+    level = diffData()$level
+    nGroups = diffNGroups()
+    comparison = as.character()
+    compSamples = as.character()
+    for (g in 1:nGroups) {
+      groupName = paste0("Group", g)
+      comparison[g] = paste(input[[groupName]], collapse = ",")
+    }
+    groups = list()
+    compSamples = NULL
+    for (g in 1:nGroups) {
+      groups[[g]] = unlist(strsplit(comparison[g], ","))
+      compSamples = c(compSamples, groups[[g]])
+    }
+    statTest(data, level, comparison)
+  })
+  
+  ## Heatmap of differentially expressed peptides/proteins
+  output$hclustDE = renderPlot({
+    reactive(input$diffSubmit, {
+      ## Selection of DEpeptides/proteins
+      nGroups = diffNGroups()
+      statRes = statRes()
+      logFC = input$diffLogFC
+      sigMetric = input$diffMetric
+      sigCutoff = input$diffSigCutoff
+      
+      resLogFC = statRes$res[, grep("Log2Fold", colnames(statRes$res))]
+      if (nGroups > 2) {
+        resLogFC = apply(cbind(abs(apply(resLogFC, 1, min)), abs(apply(resLogFC, 1, max))), 1, max)
+      } else {
+        resLogFC = abs(resLogFC)
+      }
+      rowInd = which(statRes$res[[sigMetric]] < sigCutoff & resLogFC >= logFC)
+      mat = as.matrix(statRes$data[rowInd, -1])
+      mat = t(scale(t(mat), center = T, scale = F)) # Only mean-centering
+      limVal = round(min(abs(min(mat)), abs(max(mat))))
+      matBreaks = seq(-limVal, limVal, length.out = 100)
+      color <- colorRampPalette(c("blue", "white", "red"))(n = 100)
+      pheatmap(mat = mat, color = color, breaks = matBreaks, show_rownames = F,
+               clustering_method = "ward.D", fontsize = 12)
+    })
+  })
+  
   # ## Volcano plot
   # 
   # ## Heatmap
@@ -152,10 +186,10 @@ function (input, output) {
   # output$DE = renderTable({
   #   head(DE())
   # })
-  
+  # 
   # DE = eventReactive(input$submitGroups, {
   #   ## Load the data
-  #   data = inputData()
+  #   data = inputData()$data
   #   nGroups = inputNumberGroups()
   # 
   #   ## Get the information of samples to be compared
@@ -191,19 +225,19 @@ function (input, output) {
   #   }
   #   contMatrix = makeContrasts(contrasts = contVec, levels = design)
   # })
-  
+
   # output$selectedSamples = renderText({
   #   groupName = paste0("Group", 1)
   #   paste(input[[groupName]])
   # })
-  
+
   # output$txt <- renderText({
   #   icons <- paste(input$icons, collapse = ", ")
   #   paste("You chose", icons)
   # })
 
   
-  output$table = renderTable(head(inputData()))
+  # output$table = renderTable(head(inputData()))
   
   
 }
