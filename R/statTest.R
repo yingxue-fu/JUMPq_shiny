@@ -11,12 +11,12 @@ limmaTest <- function(data, level, samples, comparison, comparisonNames, design,
   fit = contrasts.fit(fit, contMatrix)
   fit = eBayes(fit)
   if (level == "peptide") {
-    genelist = data[, 1]
+    elemList = data[, 1]
   } else if (level == "protein") {
-    genelist = data[, 2]
+    elemList = data[, 2]
   }
-  subData = cbind(genelist, subData)
-  result = topTable(fit, genelist = genelist, n = nrow(data), sort = "none")
+  rownames(subData) = elemList
+  result = topTable(fit, genelist = elemList, n = nrow(data), sort = "none")
   ## Change column names of the result table
   if (nGroups == 2) {
     colnames(result)[which(names(result) == "logFC")] = paste("Log2Fold(", comparisonNames, ")", sep = "")
@@ -51,7 +51,8 @@ fitCauchy <- function(x) {
 
 cauchyTest <- function(data, level, comparison, comparisonNames) {
   ## Assumption: there are only two groups, i.e. two reporters
-  log2FC = log(data[[comparison[1]]], 2) - log(data[[comparison[2]]], 2) ## Log2-trasnformed data
+  subData = log(data[, which(colnames(data) %in% comparison)], 2)
+  log2FC = subData[, 1] - subData[, 2] ## Log2-trasnformed data
   fit = fitCauchy(log2FC)
   pval = sapply(log2FC, function(r) {
     if (is.null(fit) || is.na(log2FC))
@@ -61,13 +62,14 @@ cauchyTest <- function(data, level, comparison, comparisonNames) {
   pval = 2 * pval
   fdr = p.adjust(pval, method = "BH")
   if (level == "peptide") {
-    elementList = data[, 1]
+    elemList = data[, 1]
   } else if (level == "protein") {
-    elementList = data[, 2]
+    elemList = data[, 2]
   }
-  result = data.frame(cbind(elementList, log2FC, pval, fdr))
-  colnames(result) = c(level, paste0("Log2Fold_", comparisonNames), "p-value", "FDR")
-  return (result)
+  rownames(subData) = elemList
+  result = data.frame(cbind(log2FC, pval, fdr))
+  colnames(result) = c(paste0("Log2Fold_", comparisonNames), "p-value", "FDR")
+  return (list(res = result, data = subData))
 }
 
 statTest = function (data, level, comparison) {
