@@ -104,7 +104,6 @@ function (input, output) {
     })
   })
 
-  ## Hierarchical clustering of samples (heatmap)
   output$hclustPlot = renderPlot({
     reactive(input$submit1, {
       data = subData1()
@@ -221,8 +220,62 @@ function (input, output) {
     data = data[rowInd, ]
   })
   
+  ## A subset of data selected based on "statRes"
+  ## This subset is for showing a data table and downloading a file
+  subData2_for_download = eventReactive(input$submit2, {
+    ## For downloading, "data" should be a subset of raw data
+    data = data2()$data
+    
+    ## Row indices of differentially expressed peptides/proteins
+    nGroups = nGroups()
+    statRes = statRes()
+    logFC = input$logfc2
+    sigMetric = input$metric2
+    sigCutoff = input$cutoff2
+    resLogFC = statRes$res[, grep("Log2Fold", colnames(statRes$res))]
+    if (nGroups > 2) {
+      resLogFC = apply(cbind(abs(apply(resLogFC, 1, min)), abs(apply(resLogFC, 1, max))), 1, max)
+    } else {
+      resLogFC = abs(resLogFC)
+    }
+    rowInd = which(statRes$res[[sigMetric]] < sigCutoff & resLogFC >= logFC)
+    
+    ## Re-organization of an output table
+    colInd = max(grep('sig', colnames(data)))
+    data = cbind(data[rowInd, 1:colInd], statRes$res[rowInd, -1])
+  })
+  
   ## Volcano plot of differential expression analysis
   ## - "statRes" can be directly used
+  output$volcanoPlot = renderPlot({
+    ## Preparation of PCA result for visualization
+    res = statRes()$res
+    logFC = input$logfc2
+    sigMetric = input$metric2
+    sigCutoff = input$cutoff2
+    if (sigMetric == "p-value") {
+      res = res[, 2:3]
+      ylab = "-log10(p-value)"
+    } else if (sigMetric == "FDR") {
+      res = res[, c(2, 4)]
+      ylab = "-log10(FDR)"
+    }
+    colnames(res) = c("logfc", "significance")
+    res[, 2] = -log10(res[, 2])
+    xlab = "log2(fold-change)"
+    
+    ## Parameter setup for ggplot
+    ratioDisplay = 4/3
+    ratioValue = (max(res[, 1]) - min(res[, 1])) / (max(res[, 2]) - min(res[, 2]))
+    ggplot(data = res, aes(logfc, significance)) +
+      geom_point(alpha = 0.2, size = 2) + 
+      geom_hline(aes(yintercept = -log10(sigCutoff))) + 
+      geom_vline(aes(xintercept = -logFC)) + 
+      geom_vline(aes(xintercept = logFC)) + 
+      labs(x = xlab, y = ylab) +
+      coord_fixed(ratioValue / ratioDisplay) + 
+      theme(text = element_text(size = 20))
+  })
   
   ## Heatmap of differentially expressed peptides/proteins
   ## Differentially expressed elements selected by "statRes" should be used
@@ -234,7 +287,7 @@ function (input, output) {
       limVal = round(min(abs(min(mat, na.rm = T)), abs(max(mat, na.rm = T))))
       matBreaks = seq(-limVal, limVal, length.out = 100)
       color <- colorRampPalette(c("blue", "white", "red"))(n = 100)
-      pheatmap(mat = mat, 
+      pheatmap(mat = mat, color = color,
                breaks = matBreaks, show_rownames = F,
                clustering_method = "ward.D2", fontsize = 12)
     })
@@ -269,71 +322,7 @@ function (input, output) {
   output$download2= downloadHandler(
     filename = "differentially_expressed_subset.txt",
     content = function(file) {
-      write.table(subData2_for_table(), file, sep = "\t", row.names = FALSE)
+      write.table(subData2_for_download(), file, sep = "\t", row.names = FALSE)
     }
   )
-  
-  
-  # ## Volcano plot
-  # 
-  # ## Heatmap
-  # 
-  # ## DEpeptide/protein table
-  # output$DE = renderTable({
-  #   head(DE())
-  # })
-  # 
-  # DE = eventReactive(input$submitGroups, {
-  #   ## Load the data
-  #   data = inputData()$data
-  #   nGroups = inputNumberGroups()
-  # 
-  #   ## Get the information of samples to be compared
-  #   comparison = as.character()
-  #   for (g in 1:nGroups) {
-  #     groupName = paste0("Group", g)
-  #     comparison[g] = paste(input[[groupName]], collapse = ",")
-  #   }
-  #   groups = list()
-  #   nSamples = 0
-  #   compSamples = NULL
-  #   for (g in 1:nGroups) {
-  #     groups[[g]] = unlist(strsplit(comparison[g], ","))
-  #     nSamples = nSamples + length(groups[[g]])
-  #     compSamples = c(compSamples, groups[[g]])
-  #   }
-  # 
-  #   ## Generate a design matrix (which contains the information of comparison)
-  #   subColNames = colnames(data)[which(colnames(data) %in% compSamples)]
-  #   design = matrix(0, nrow = nSamples, ncol = nGroups)
-  #   for (g in 1:nGroups) {
-  #     design[which(subColNames %in% groups[[g]]), g] = 1
-  #   }
-  #   colnames(design) = paste("group", seq(1, nGroups), sep = "")
-  # 
-  #   ## Generate a contrast matrix and new column names for the LIMMA result table
-  #   contVec = NULL
-  #   newColNames = NULL
-  #   combMatrix = combn(seq(1, nGroups), 2)
-  #   for (j in 1:ncol(combMatrix)) {
-  #     contVec = c(contVec, paste(paste("group", combMatrix[1, j], sep = ""), paste("group", combMatrix[2, j], sep = ""), sep = "-"))
-  #     newColNames = c(newColNames, paste(comparison[combMatrix[1, j]], "/", comparison[combMatrix[2, j]], sep = ""))
-  #   }
-  #   contMatrix = makeContrasts(contrasts = contVec, levels = design)
-  # })
-
-  # output$selectedSamples = renderText({
-  #   groupName = paste0("Group", 1)
-  #   paste(input[[groupName]])
-  # })
-
-  # output$txt <- renderText({
-  #   icons <- paste(input$icons, collapse = ", ")
-  #   paste("You chose", icons)
-  # })
-
-  
-  # output$table = renderTable(head(inputData()))
-  
-  
 }

@@ -47,7 +47,7 @@ fluidPage(
           tabPanel(
             "Heatmap of the subset of peptides/proteins",
             br(),
-            plotOutput("hclustPlot", height = "600px", width = "500px")
+            plotOutput("hclustPlot", height = "700px", width = "500px")
           ),
           tabPanel(
             "Data table",
@@ -102,14 +102,14 @@ fluidPage(
       mainPanel(
         tabsetPanel(
           tabPanel(
-            "Volcano plot"
-            # br(),
-            # plotOutput("pcaPlot", height = "600px")
+            "Volcano plot",
+            br(),
+            plotOutput("volcanoPlot", height = "600px")
           ),
           tabPanel(
             "Heatmap of differentially expressed peptides/proteins",
             br(),
-            plotOutput("hclustDE", height = "800px", width = "500px")
+            plotOutput("hclustDE", height = "700px", width = "500px")
           ),
           tabPanel(
             "Data table",
