@@ -1,15 +1,17 @@
 ## server.R
 rm(list = ls())
 library(readxl)
+library(gplots)
 library(ggplot2)
-library(pheatmap)
+# library(pheatmap)
 library(DT)
+library(msigdbr)
+library(clusterProfiler)
 source("R/statTest.R")
 
 function (input, output) {
     ## Increase the maximum size of uploaded file (up to 100MB)
     options(shiny.maxRequestSize = 100 * (1024 ^ 2))
-    
     ######################################################
     ######################################################
     ## Unsupervised analysis, i.e. explorative analysis ##
@@ -53,7 +55,6 @@ function (input, output) {
         } else if (level == "protein") {
             entry = rawData[, 2]
         }
-        
         ## CV or MAD calcuation is based on log2-transformed intensities
         ## but output format is raw-intensity scale
         colInd = grep("sig", colnames(rawData))
@@ -67,45 +68,48 @@ function (input, output) {
         } else if (as.numeric(input$metric1) == 2) {
             rowInd = mad > quantile(mad, prob = 1 - threshold)
         }
-        
-        ## Return data for the following analyses
-        ## Column 1: entry (either protein accession or peptide sequence)
-        ## Column 2~ : log2-transformed intensity values for reporter ions
+        ## Organize a dataset for subsequent analyses
+        ##   Column 1: entry (either protein accession or peptide sequence)
+        ##   Column 2~ : log2-transformed intensity values for reporter ions
         entry = entry[rowInd]
         data = log(rawData[rowInd, colInd], 2)
         rownames(data) = entry
-        return (data)
+        ## Organize a dataset for downloading
+        colInd = max(grep("sig", colnames(rawData)))
+        rawData = rawData[, 1:colInd] ## Remove statistical analysis results from previous jump -q
+        rawData = rawData[rowInd, ]
+        return (list(rawData = rawData, data = data))
     })
     
-    ####################################################################
-    ## Selection of a data subset (highly variable)                   ##
-    ## This subset is for showing a data table and downloading a file ##
-    ####################################################################
-    subData1_for_download = eventReactive(input$submit1, {
-        rawData = data1()$data
-        
-        ## CV or MAD calcuation is based on log2-transformed intensities
-        ## but output format is raw-intensity scale
-        colInd = grep("sig", colnames(rawData))
-        data = log(rawData[, colInd], 2)
-        cv = apply(data, 1, sd) / rowMeans(data)
-        mad = apply(abs(data - apply(data, 1, median)), 1, median)
-        threshold = as.numeric(input$variant1)/ 100 ## Threshold percentage
-        rowInd = NULL
-        if (as.numeric(input$metric1) == 1) {
-            rowInd = cv > quantile(cv, prob = 1 - threshold)
-        } else if (as.numeric(input$metric1) == 2) {
-            rowInd = mad > quantile(mad, prob = 1 - threshold)
-        }
-        rawData[rowInd, ]
-    })
+    # ####################################################################
+    # ## Selection of a data subset (highly variable)                   ##
+    # ## This subset is for showing a data table and downloading a file ##
+    # ####################################################################
+    # subData1_for_download = eventReactive(input$submit1, {
+    #     rawData = data1()$data
+    #     
+    #     ## CV or MAD calcuation is based on log2-transformed intensities
+    #     ## but output format is raw-intensity scale
+    #     colInd = grep("sig", colnames(rawData))
+    #     data = log(rawData[, colInd], 2)
+    #     cv = apply(data, 1, sd) / rowMeans(data)
+    #     mad = apply(abs(data - apply(data, 1, median)), 1, median)
+    #     threshold = as.numeric(input$variant1)/ 100 ## Threshold percentage
+    #     rowInd = NULL
+    #     if (as.numeric(input$metric1) == 1) {
+    #         rowInd = cv > quantile(cv, prob = 1 - threshold)
+    #     } else if (as.numeric(input$metric1) == 2) {
+    #         rowInd = mad > quantile(mad, prob = 1 - threshold)
+    #     }
+    #     rawData[rowInd, ]
+    # })
     
     ##############
     ## PCA plot ##
     ##############
     output$pcaPlot = renderPlot({
         reactive(input$submit1, {
-            data = subData1()
+            data = subData1()$data
             ## Preparation of PCA result for visualization
             resPCA = prcomp(t(data), center = TRUE, scale = TRUE)
             eigs = resPCA$sdev ^ 2
@@ -132,14 +136,24 @@ function (input, output) {
     ############################
     output$hclustPlot = renderPlot({
         reactive(input$submit1, {
-            data = subData1()
-            color <- colorRampPalette(c("blue", "white", "red"))(n = 100)
+            data = subData1()$data
             mat = as.matrix(data)
             mat = t(scale(t(mat), center = T, scale = F)) # Only mean-centering
+            
+            ## heatmap.2
+            myColor <- colorRampPalette(c("blue", "white", "red"))(n = 100)
             limVal = round(min(abs(min(mat)), abs(max(mat))))
-            matBreaks = seq(-limVal, limVal, length.out = 100)
-            pheatmap(mat = mat, color = color, breaks = matBreaks, show_rownames = F,
-                     clustering_method = "ward.D2", fontsize = 12)
+            myBreaks = seq(-limVal, limVal, length.out = 101)
+            par(oma = c(10, 3, 1, 3), mar = c(1, 1, 1, 1))
+            h = heatmap.2(x = mat, density.info = "n", trace = "n", labRow = F, col = myColor,
+                          hclust = function(x) hclust(x, method = "ward.D2"),
+                          lhei = c(1, 6.5), lwid = c(2, 10), breaks = myBreaks,
+                          key.par = list(mar= c(5, 0, 0, 0)), key.title = NA,
+                          key.xlab = "scaled intensity")
+            
+            # ## pheatmap
+            # pheatmap(mat = mat, color = myColor, breaks = myBreaks, show_rownames = F,
+            #          clustering_method = "ward.D2", fontsize = 12)
         })
     })
     
@@ -147,7 +161,7 @@ function (input, output) {
     ## Data table ##
     ################
     output$dataTable1 = DT::renderDataTable({
-        data = subData1()
+        data = subData1()$data
         ## Since data is log2-transformed,
         ## it needs to be re-transformed to raw-scale intensity levels
         ## for showing a data table
@@ -158,7 +172,7 @@ function (input, output) {
     ## Plot of the selected rows from the data table ##
     ###################################################
     output$plotDataTable1 = renderPlot({
-        data = subData1()
+        data = subData1()$data
         ## Since data is log2-transformed,
         ## it needs to be re-transformed to raw-scale intensity levels
         ## for showing a data table
@@ -174,10 +188,10 @@ function (input, output) {
     ########################################################
     ## Download the subset of data (exploratory analysis) ##
     ########################################################
-    output$download1= downloadHandler(
+    output$download1 = downloadHandler(
         filename = "exploratory_subset.txt",
         content = function(file) {
-            write.table(subData1_for_download(), file, sep = "\t", row.names = FALSE)
+            write.table(subData1()$rawData, file, sep = "\t", row.names = FALSE)
         }
     )
     
@@ -188,25 +202,25 @@ function (input, output) {
     ################################################################
     ## Load JUMP -q output file (either id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx)
     data2 = reactive ({
-        ## Desktop version
-        inFileName = input$inputFile2$name
-        if (length(grep("pep", inFileName))) {
-            tbl = read_excel(inFileName, skip = 4) # Peptide publication table
-            level = "peptide"
-        } else {
-            tbl = read_excel(inFileName, skip = 1) # Protein publication table
-            level = "protein"
-        }
-        
-        # ## Server version
+        # ## Desktop version
         # inFileName = input$inputFile2$name
         # if (length(grep("pep", inFileName))) {
-        #     tbl = read_excel(input$inputFile2$datapath, skip = 4) # Peptide publication table
+        #     tbl = read_excel(inFileName, skip = 4) # Peptide publication table
         #     level = "peptide"
         # } else {
-        #     tbl = read_excel(input$inputFile2$datapath, skip = 1) # Protein publication table
+        #     tbl = read_excel(inFileName, skip = 1) # Protein publication table
         #     level = "protein"
         # }
+        
+        ## Server version
+        inFileName = input$inputFile2$name
+        if (length(grep("pep", inFileName))) {
+            tbl = read_excel(input$inputFile2$datapath, skip = 4) # Peptide publication table
+            level = "peptide"
+        } else {
+            tbl = read_excel(input$inputFile2$datapath, skip = 1) # Protein publication table
+            level = "protein"
+        }
         
         ## Selection of a subset of data according to input parameters
         list(data = as.data.frame(tbl), level = level)
@@ -255,79 +269,82 @@ function (input, output) {
     subData2 = eventReactive(input$submit2, {
         nGroups = nGroups()
         statRes = statRes()
+        ## Load data (for download and analysis, separately)
+        rawData = data2()$data
         data = statRes$data
+        ## Handle threshold inputs
         logFC = input$logfc2
         sigMetric = input$metric2
         sigCutoff = input$cutoff2
         resLogFC = statRes$res[, grep("Log2Fold", colnames(statRes$res))]
         if (nGroups > 2) {
-            resLogFC = apply(cbind(abs(apply(resLogFC, 1, min)), abs(apply(resLogFC, 1, max))), 1, max)
+            absLogFC = apply(cbind(abs(apply(resLogFC, 1, min)), abs(apply(resLogFC, 1, max))), 1, max)
         } else {
-            resLogFC = abs(resLogFC)
+            absLogFC = abs(resLogFC)
         }
-        rowInd = which(statRes$res[[sigMetric]] < sigCutoff & resLogFC >= logFC)
+        ## Select DE peptides/proteins
+        rowInd = which(statRes$res[[sigMetric]] < sigCutoff & absLogFC >= logFC)
+        ## Organize a dataset for subsequent analyses
+        # data = cbind(data, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR)
+        # data = cbind(data, resLogFC)
+        if (nGroups == 2) {
+            data = cbind(data, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR, Log2Fold = resLogFC)
+        } else if (nGroups > 2) {
+            data = cbind(data, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR)
+            data = cbind(data, resLogFC)
+        }
         data = data[rowInd, ]
-    })
-    
-    ####################################################################
-    ## A subset of data selected based on "statRes"                   ##
-    ## This subset is for showing a data table and downloading a file ##
-    ####################################################################
-    subData2_for_download = eventReactive(input$submit2, {
-        ## For downloading, "data" should be a subset of raw data
-        data = data2()$data
-        
-        ## Row indices of differentially expressed peptides/proteins
-        nGroups = nGroups()
-        statRes = statRes()
-        logFC = input$logfc2
-        sigMetric = input$metric2
-        sigCutoff = input$cutoff2
-        resLogFC = statRes$res[, grep("Log2Fold", colnames(statRes$res))]
-        if (nGroups > 2) {
-            resLogFC = apply(cbind(abs(apply(resLogFC, 1, min)), abs(apply(resLogFC, 1, max))), 1, max)
-        } else {
-            resLogFC = abs(resLogFC)
+        data = data[order(data$`p-value`), ]
+        ## Organize a dataset for downloading
+        colInd = max(grep("^sig", colnames(rawData))) ## Last column index for reporters
+        rawData = rawData[, 1:colInd] ## Remove statistical analysis results from jump -q
+        # rawData = cbind(rawData, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR)
+        # rawData = cbind(rawData, resLogFC)
+        if (nGroups == 2) {
+            rawData = cbind(rawData, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR, Log2Fold = resLogFC)
+        } else if (nGroups > 2) {
+            rawData = cbind(rawData, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR)
+            rawData = cbind(rawData, resLogFC)
         }
-        rowInd = which(statRes$res[[sigMetric]] < sigCutoff & resLogFC >= logFC)
-        
-        ## Re-organization of an output table
-        colInd = max(grep('sig', colnames(data)))
-        data = cbind(data[rowInd, 1:colInd], statRes$res[rowInd, -1])
+        rawData = rawData[rowInd, ]
+        return (list(rawData = rawData, data = data))
     })
-    
+
     ######################################################
     ## Volcano plot of differential expression analysis ##
     ## - "statRes" can be directly used                 ##
     ######################################################
     output$volcanoPlot = renderPlot({
-        ## Preparation of PCA result for visualization
-        res = statRes()$res
-        logFC = input$logfc2
-        sigMetric = input$metric2
-        sigCutoff = input$cutoff2
-        if (sigMetric == "p-value") {
-            res = res[, 2:3]
-            ylab = "-log10(p-value)"
-        } else if (sigMetric == "FDR") {
-            res = res[, c(2, 4)]
-            ylab = "-log10(FDR)"
-        }
-        colnames(res) = c("logfc", "significance")
-        res[, 2] = -log10(res[, 2])
-        xlab = "log2(fold-change)"
-        
-        ## Parameter setup for ggplot
-        ratioDisplay = 4/3
-        ratioValue = (max(res[, 1]) - min(res[, 1])) / (max(res[, 2]) - min(res[, 2]))
-        ggplot(data = res, aes(logfc, significance)) +
-            geom_point(alpha = 0.2, size = 2) + 
-            geom_hline(aes(yintercept = -log10(sigCutoff))) + 
-            geom_vline(aes(xintercept = -logFC)) + 
-            geom_vline(aes(xintercept = logFC)) + 
-            labs(x = xlab, y = ylab) +
-            coord_fixed(ratioValue / ratioDisplay) + 
-            theme(text = element_text(size = 20))
+        reactive(input$submit2, {
+            ## Preparation of PCA result for visualization
+            res = statRes()$res
+            logFC = input$logfc2
+            sigMetric = input$metric2
+            sigCutoff = input$cutoff2
+            if (sigMetric == "p-value") {
+                res = res[, 2:3]
+                ylab = "-log10(p-value)"
+            } else if (sigMetric == "FDR") {
+                res = res[, c(2, 4)]
+                ylab = "-log10(FDR)"
+            }
+            colnames(res) = c("logfc", "significance")
+            res[, 2] = -log10(res[, 2])
+            xlab = "log2(fold-change)"
+            
+            ## Parameter setup for ggplot
+            ratioDisplay = 4/3
+            ratioValue = (max(res[, 1]) - min(res[, 1])) / (max(res[, 2]) - min(res[, 2]))
+            v = ggplot(data = res, aes(logfc, significance)) +
+                geom_point(alpha = 0.2, size = 2) + 
+                geom_hline(aes(yintercept = -log10(sigCutoff))) + 
+                geom_vline(aes(xintercept = -logFC)) + 
+                geom_vline(aes(xintercept = logFC)) + 
+                labs(x = xlab, y = ylab) +
+                coord_fixed(ratioValue / ratioDisplay) + 
+                theme(text = element_text(size = 20))
+            plot(v)
+        })
     })
     
     ############################################################################
@@ -336,15 +353,20 @@ function (input, output) {
     ############################################################################
     output$hclustDE = renderPlot({
         reactive(input$submit2, {
-            data = subData2()
+            data = subData2()$data
+            colInd = grep('^sig', colnames(data))
+            data = data[, colInd]
             mat = as.matrix(data)
             mat = t(scale(t(mat), center = T, scale = F)) # Only mean-centering
             limVal = round(min(abs(min(mat, na.rm = T)), abs(max(mat, na.rm = T))))
-            matBreaks = seq(-limVal, limVal, length.out = 100)
-            color <- colorRampPalette(c("blue", "white", "red"))(n = 100)
-            pheatmap(mat = mat, color = color,
-                     breaks = matBreaks, show_rownames = F,
-                     clustering_method = "ward.D2", fontsize = 12)
+            myBreaks = seq(-limVal, limVal, length.out = 101)
+            myColor <- colorRampPalette(c("blue", "white", "red"))(n = 100)
+            par(oma = c(10, 3, 1, 3), mar = c(1, 1, 1, 1))
+            h = heatmap.2(x = mat, density.info = "n", trace = "n", labRow = F, col = myColor,
+                          hclust = function(x) hclust(x, method = "ward.D2"),
+                          lhei = c(1, 6.5), lwid = c(2, 10), breaks = myBreaks,
+                          key.par = list(mar= c(5, 0, 0, 0)), key.title = NA,
+                          key.xlab = "scaled intensity")
         })
     })
     
@@ -352,13 +374,19 @@ function (input, output) {
     ## Data table                                                             ##
     ## Differentially expressed elements selected by "statRes" should be used ##
     ############################################################################
-    output$dataTable2 = DT::renderDataTable({
+    output$dataTable2 = DT::renderDT({
         ## Since data is log2-transformed,
         ## it needs to be re-transformed to raw-scale intensity levels
         ## for showing a data table
-        data = subData2()
-        data = round(2 ** data, digits = 2)
-    }, options = list(scrollX = TRUE))
+        data = subData2()$data
+        colInd = grep('^sig', colnames(data))
+        data[, colInd] = round(2 ** data[, colInd], digits = 2)
+        data$`p-value` = format(data$`p-value`, digits = 3)
+        data$FDR = format(data$FDR, digits = 3)
+        colInd = grep('Log2Fold', colnames(data))
+        data[, colInd] = round(data[, colInd], digits = 2)
+        data
+    }, options = list(autoWidth = FALSE, scrollX = TRUE))
     
     ###################################################
     ## Plot of the selected rows from the data table ##
@@ -367,7 +395,9 @@ function (input, output) {
         ## Since data is log2-transformed,
         ## it needs to be re-transformed to raw-scale intensity levels
         ## for showing a data table
-        data = subData2()
+        data = subData2()$data
+        colInd = grep('^sig', colnames(data))
+        data = data[, colInd]
         data = round(2 ** data, digits = 2)
         rowInd = input$dataTable2_rows_selected
         x = as.numeric(data[rowInd, ])
@@ -380,10 +410,88 @@ function (input, output) {
     ####################################################################
     ## Download the subset of data (differential expression analysis) ##
     ####################################################################
-    output$download2= downloadHandler(
-        filename = "differentially_expressed_subset.txt",
+    output$download2 = downloadHandler(
+        filename = "DE_proteins.txt",
         content = function(file) {
-            write.table(subData2_for_download(), file, sep = "\t", row.names = FALSE)
+            write.table(subData2()$rawData, file, sep = "\t", row.names = FALSE)
+        }
+    )
+    
+    ######################
+    ## Enrichment study ##
+    ######################
+    enrichmentRes = reactive({
+        if (input$enrichmentSubmit == 0) return ()
+        # Database species
+        if (input$enrichmentSpecies == 1) {
+            orgDb ="org.Hs.eg.db"; orgName = "Homo sapiens"
+        } else if (input$enrichmentSpecies == 2) {
+            orgDb ="org.Mm.eg.db"; orgName = "Mus musculus"
+        } else if (input$enrichmentSpecies == 3) {
+            orgDb ="org.Rn.eg.db"; orgName = "Rattus norvegicus"
+        } else if (input$enrichmentSpecies == 4) {
+            orgDb ="org.Sc.sgd.db"; orgName = "Saccharomyces cerevisiae"
+        } else if (input$enrichmentSpecies == 5) {
+            orgDb ="org.Dm.eg.db"; orgName = "Drosophila melanogaster"
+        } else if (input$enrichmentSpecies == 6) {
+            orgDb ="org.Ce.eg.db"; orgName = "Caenorhabditis elegans"
+        }
+        ## Background genes (optional)
+        bgGenes = NULL
+        bgFileName = input$enrichmentBgGenes$name
+        if (!is.null(bgFileName)) { ## Background prots/genes are specified
+            bgProts = readLines(bgFileName) ## Desktop version
+            # bgProts = readLines(input$enrichmentBgGenes$datapath) ## Server version
+            bgGenes = bitr(bgProts, fromType = "UNIPROT", toType = "SYMBOL", OrgDb = orgDb)
+        }
+        ## Gene set
+        if (input$enrichmentGeneset == 1) {
+            gsCat = "H"
+        } else {
+            gsCat = paste0("C", (as.numeric(input$enrichmentGeneset) - 1))
+        }
+        m_df = msigdbr(species = orgName, category = gsCat)
+        m_t2g = m_df %>% dplyr::select(gs_name, gene_symbol) %>% as.data.frame()
+        ## Convert query protein accessions to gene symbols
+        data = subData2()$data
+        prots = NULL
+        for (i in 1:dim(data)[1]) {
+            prots[i] = unlist(strsplit(rownames(data)[i], '\\|'))[2]
+        }
+        geneSymbols = bitr(prots, fromType = "UNIPROT", toType = "SYMBOL", OrgDb = orgDb)
+        geneSymbols = geneSymbols$SYMBOL
+        ## Enrichment analysis using "clusterProfiler"
+        if (!is.null(bgGenes)) {
+            res = enricher(gene = geneSymbols, TERM2GENE = m_t2g, universe = bgGenes,
+                           pvalueCutoff = 1, qvalueCutoff = 1)
+        } else {
+            res = enricher(gene = geneSymbols, TERM2GENE = m_t2g,
+                           pvalueCutoff = 1, qvalueCutoff = 1)
+        }
+        res = res[, c(3, 4, 5, 6, 9, 8)]
+        names(res) = c("GeneRatio", "BgRatio", "pvalue", "FDR", "Count", "Genes")
+        return (res)
+    })
+
+    output$enrichmentTable = DT::renderDataTable({
+        if (input$enrichmentSubmit == 0) return ()
+        withProgress(message = NULL, detail = "Enrichment analysis", {
+            res = enrichmentRes();
+            incProgress(1, detail = paste("Done"))})
+        # res$pvalue = as.numeric(formatC(res$pvalue, digits = 3))
+        # res$FDR = as.numeric(formatC(res$FDR, digits = 3))
+        res$pvalue = format(res$pvalue, digits = 2)
+        res$FDR = format(res$FDR, digits = 2)
+        res
+    }, options = list(scrollX = TRUE))
+    
+    output$enrichmentDownload = downloadHandler(
+        filename = "DE_enrichment.txt",
+        content = function(file) {
+            data = enrichmentRes()
+            data = cbind(Geneset = rownames(data), data)
+            rownames(data) = NULL
+            write.table(data, file, sep = "\t", quote = F, row.names = F)
         }
     )
 }
