@@ -3,7 +3,6 @@ rm(list = ls())
 library(readxl)
 library(gplots)
 library(ggplot2)
-# library(pheatmap)
 library(DT)
 library(msigdbr)
 library(clusterProfiler)
@@ -19,25 +18,25 @@ function (input, output) {
     ######################################################
     ## Load JUMP -q output file (either id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx)
     data1 = reactive ({
-        ## Desktop version
-        inFileName = input$inputFile1$name
-        if (length(grep("pep", inFileName))) {
-            tbl = read_excel(inFileName, skip = 4) # Peptide publication table
-            level = "peptide"
-        } else {
-            tbl = read_excel(inFileName, skip = 1) # Protein publication table
-            level = "protein"
-        }
-        
-        # ## Server version
+        # ## Desktop version
         # inFileName = input$inputFile1$name
         # if (length(grep("pep", inFileName))) {
-        #     tbl = read_excel(input$inputFile1$datapath, skip = 4) # Peptide publication table
+        #     tbl = read_excel(inFileName, skip = 4) # Peptide publication table
         #     level = "peptide"
         # } else {
-        #     tbl = read_excel(input$inputFile1$datapath, skip = 1) # Protein publication table
+        #     tbl = read_excel(inFileName, skip = 1) # Protein publication table
         #     level = "protein"
         # }
+        
+        ## Server version
+        inFileName = input$inputFile1$name
+        if (length(grep("pep", inFileName))) {
+            tbl = read_excel(input$inputFile1$datapath, skip = 4) # Peptide publication table
+            level = "peptide"
+        } else {
+            tbl = read_excel(input$inputFile1$datapath, skip = 1) # Protein publication table
+            level = "protein"
+        }
         
         ## Selection of a subset of data according to input parameters
         list(data = as.data.frame(tbl), level = level)
@@ -139,7 +138,6 @@ function (input, output) {
             data = subData1()$data
             mat = as.matrix(data)
             mat = t(scale(t(mat), center = T, scale = F)) # Only mean-centering
-            
             ## heatmap.2
             myColor <- colorRampPalette(c("blue", "white", "red"))(n = 100)
             limVal = round(min(abs(min(mat)), abs(max(mat))))
@@ -150,10 +148,6 @@ function (input, output) {
                           lhei = c(1, 6.5), lwid = c(2, 10), breaks = myBreaks,
                           key.par = list(mar= c(5, 0, 0, 0)), key.title = NA,
                           key.xlab = "scaled intensity")
-            
-            # ## pheatmap
-            # pheatmap(mat = mat, color = myColor, breaks = myBreaks, show_rownames = F,
-            #          clustering_method = "ward.D2", fontsize = 12)
         })
     })
     
@@ -296,7 +290,7 @@ function (input, output) {
         data = data[rowInd, ]
         data = data[order(data$`p-value`), ]
         ## Organize a dataset for downloading
-        colInd = max(grep("^sig", colnames(rawData))) ## Last column index for reporters
+        colInd = max(grep("sig[0-9]{3}", colnames(rawData))) ## Last column index for reporters
         rawData = rawData[, 1:colInd] ## Remove statistical analysis results from jump -q
         # rawData = cbind(rawData, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR)
         # rawData = cbind(rawData, resLogFC)
@@ -354,7 +348,7 @@ function (input, output) {
     output$hclustDE = renderPlot({
         reactive(input$submit2, {
             data = subData2()$data
-            colInd = grep('^sig', colnames(data))
+            colInd = grep('sig[0-9]{3}', colnames(data))
             data = data[, colInd]
             mat = as.matrix(data)
             mat = t(scale(t(mat), center = T, scale = F)) # Only mean-centering
@@ -379,7 +373,7 @@ function (input, output) {
         ## it needs to be re-transformed to raw-scale intensity levels
         ## for showing a data table
         data = subData2()$data
-        colInd = grep('^sig', colnames(data))
+        colInd = grep('sig[0-9]{3}', colnames(data))
         data[, colInd] = round(2 ** data[, colInd], digits = 2)
         data$`p-value` = format(data$`p-value`, digits = 3)
         data$FDR = format(data$FDR, digits = 3)
@@ -396,7 +390,7 @@ function (input, output) {
         ## it needs to be re-transformed to raw-scale intensity levels
         ## for showing a data table
         data = subData2()$data
-        colInd = grep('^sig', colnames(data))
+        colInd = grep('sig[0-9]{3}', colnames(data))
         data = data[, colInd]
         data = round(2 ** data, digits = 2)
         rowInd = input$dataTable2_rows_selected
