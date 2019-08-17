@@ -160,7 +160,7 @@ function (input, output) {
         ## it needs to be re-transformed to raw-scale intensity levels
         ## for showing a data table
         data = round(2 ** data, digits = 2)
-    }, selection = 'single', options = list(scrollX = TRUE))
+    }, selection = 'single', options = list(autoWidth = FALSE, scrollX = TRUE, pageLength = 5))
     
     ###################################################
     ## Plot of the selected rows from the data table ##
@@ -172,10 +172,27 @@ function (input, output) {
         ## for showing a data table
         data = round(2 ** data, digits = 2)
         rowInd = input$dataTable1_rows_selected
-        x = as.numeric(data[rowInd, ])
         if (length(rowInd) == 1) {
-            par(mar = c(10, 6, 1, 1), mgp = c(5, 1, 0))
-            barplot(x, ylab = "intensity", names.arg = colnames(data), las = 2)
+            x = as.numeric(data[rowInd, ])
+            df = data.frame(samples = colnames(data), intensity = x)
+            g = ggplot(df, aes(x = samples, y = intensity)) + 
+                geom_bar(stat = "identity") + 
+                theme(text = element_text(size = 15),
+                      axis.text.x = element_text(angle = 90, hjust = 1)) + 
+                scale_x_discrete(limits = colnames(data)) +
+                coord_cartesian(ylim = c(0.8 * min(x), max(x)))
+            plot(g)
+        } else {
+            rowInd = 1
+            x = as.numeric(data[rowInd, ])
+            df = data.frame(samples = colnames(data), intensity = x)
+            g = ggplot(df, aes(x = samples, y = intensity)) + 
+                geom_bar(stat = "identity") + 
+                theme(text = element_text(size = 15), 
+                      axis.text.x = element_text(angle = 90, hjust = 1)) + 
+                scale_x_discrete(limits = colnames(data)) +
+                coord_cartesian(ylim = c(0.8 * min(x), max(x)))
+            plot(g)
         }
     })
     
@@ -380,7 +397,7 @@ function (input, output) {
         colInd = grep('Log2Fold', colnames(data))
         data[, colInd] = round(data[, colInd], digits = 2)
         data
-    }, selection = 'single', options = list(autoWidth = FALSE, scrollX = TRUE))
+    }, selection = 'single', options = list(autoWidth = FALSE, scrollX = TRUE, pageLength = 5))
     
     ###################################################
     ## Plot of the selected rows from the data table ##
@@ -394,10 +411,27 @@ function (input, output) {
         data = data[, colInd]
         data = round(2 ** data, digits = 2)
         rowInd = input$dataTable2_rows_selected
-        x = as.numeric(data[rowInd, ])
         if (length(rowInd) == 1) {
-            par(mar = c(10, 6, 1, 1), mgp = c(5, 1, 0))
-            barplot(x, ylab = "intensity", names.arg = colnames(data), las = 2)
+            x = as.numeric(data[rowInd, ])
+            df = data.frame(samples = colnames(data), intensity = x)
+            g = ggplot(df, aes(x = samples, y = intensity)) + 
+                geom_bar(stat = "identity") + 
+                theme(text = element_text(size = 15),
+                      axis.text.x = element_text(angle = 90, hjust = 1)) + 
+                scale_x_discrete(limits = colnames(data)) +
+                coord_cartesian(ylim = c(0.8 * min(x), max(x)))
+            plot(g)
+        } else {
+            rowInd = 1
+            x = as.numeric(data[rowInd, ])
+            df = data.frame(samples = colnames(data), intensity = x)
+            g = ggplot(df, aes(x = samples, y = intensity)) + 
+                geom_bar(stat = "identity") + 
+                theme(text = element_text(size = 15), 
+                      axis.text.x = element_text(angle = 90, hjust = 1)) + 
+                scale_x_discrete(limits = colnames(data)) +
+                coord_cartesian(ylim = c(0.8 * min(x), max(x)))
+            plot(g)
         }
     })
     
