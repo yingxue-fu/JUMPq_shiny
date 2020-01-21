@@ -365,7 +365,7 @@ function (input, output) {
     output$hclustDE = renderPlot({
         reactive(input$submit2, {
             data = subData2()$data
-            colInd = grep('sig[0-9]{3}', colnames(data))
+            colInd = grep('^sig[0-9]{3}', colnames(data))
             data = data[, colInd]
             mat = as.matrix(data)
             mat = t(scale(t(mat), center = T, scale = F)) # Only mean-centering
@@ -390,7 +390,7 @@ function (input, output) {
         ## it needs to be re-transformed to raw-scale intensity levels
         ## for showing a data table
         data = subData2()$data
-        colInd = grep('sig[0-9]{3}', colnames(data))
+        colInd = grep('^sig[0-9]{3}', colnames(data))
         data[, colInd] = round(2 ** data[, colInd], digits = 2)
         data$`p-value` = format(data$`p-value`, digits = 3)
         data$FDR = format(data$FDR, digits = 3)
@@ -407,7 +407,7 @@ function (input, output) {
         ## it needs to be re-transformed to raw-scale intensity levels
         ## for showing a data table
         data = subData2()$data
-        colInd = grep('sig[0-9]{3}', colnames(data))
+        colInd = grep('^sig[0-9]{3}', colnames(data))
         data = data[, colInd]
         data = round(2 ** data, digits = 2)
         rowInd = input$dataTable2_rows_selected

@@ -11,10 +11,13 @@ fluidPage(
             "Exploratory data analysis",
             ## Sidebar panel controlling an exploratory data analysis
             sidebarPanel(
+                # tags$head(tags$style( HTML(' .test1 .tab-content {margin-top:-50px;}'))),
+                tags$head(tags$style(HTML('h5 {margin-bottom:0px; margin-top:0px;}'))),
                 width = 3,
                 p("1. PCA (principal component analysis) plot of samples", br(),
                   "2. Hierarchical clustering result of samples and peptides/proteins", br(),
                   "3. Data table of highly variant peptides/proteins"),
+                br(),
                 fileInput("inputFile1", 
                           label = HTML("Choose a file<h5>id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx</h5>")),
                 numericInput("variant1",
@@ -26,13 +29,13 @@ fluidPage(
             ), ## sidebarPanel
             
             ## Main panel showing the results of the exploratory data analysis
-            # mainPanel(
+            mainPanel(
                 tabsetPanel(
                     tabPanel("Principal component analysis (PCA)", br(), plotOutput("pcaPlot", height = "500px")),
                     tabPanel("Heatmap of the subset of peptides/proteins", br(), align = "center", plotOutput("hclustPlot", height = "700px", width = "500px")),
                     tabPanel("Data table", br(), DT::dataTableOutput("dataTable1"), br(), downloadButton("download1", "Download"), br(), plotOutput("plotDataTable1"))
                 )
-            # ) ## mainPanel
+            ) ## mainPanel
         ), ## tabPanel
         
         ######################################
@@ -86,6 +89,7 @@ fluidPage(
                       "2. For three or more group comparison, a heatmap will be provided", br(),
                       "3. Data table of differentially expressed peptides/proteins", br(),
                       "4. Functional enrichment study of differentially expressed proteins"),
+                    br(),
                     fileInput("inputFile2", label = HTML("Choose a file<h5>id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx</h5>")),
                     numericInput("numGroups2", label = "Number of groups", value = 2),
                     uiOutput("groups2"),
