@@ -1,0 +1,13 @@
+name: jumpq
+title: jumpq
+username: jchorstudio
+account: jchorstudio
+server: svlpdmzshiny03
+hostUrl: http://svlpdmzshiny03/__api__
+appId: 6
+bundleId: 20
+url: http://svlpdmzshiny03/content/6/
+when: 1609970768.62384
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: comprehensive_list.txt|de.txt|downloadTest.txt|enricher.txt|enrichmentDownload.txt|enrichTest.txt|foreground.txt|foreground_enrichment_FDR.txt|GO_KEGG_hallmark_genelist.txt|heatmaplyTest.R|id_uni_pep_quan.xlsx|id_uni_prot_quan.xlsx|Rplot001.jpg|test.R|Thumbs.db|R/id_uni_prot_quan.xlsx|test/server.R|test/ui.R
