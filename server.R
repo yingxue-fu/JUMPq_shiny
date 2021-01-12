@@ -4,8 +4,8 @@ library(readxl)
 library(gplots)
 library(ggplot2)
 library(DT)
-library(msigdbr)
-library(clusterProfiler)
+# library(msigdbr)
+# library(clusterProfiler)
 library(curl)
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
@@ -34,7 +34,7 @@ function (input, output) {
         #     tbl = read_excel(inFileName, skip = 1) # Protein publication table
         #     level = "protein"
         # }
-        
+
         ## Server version
         inFileName = input$inputFile1$name
         if (length(grep("pep", inFileName))) {
@@ -44,11 +44,11 @@ function (input, output) {
             tbl = read_excel(input$inputFile1$datapath, skip = 1) # Protein publication table
             level = "protein"
         }
-        
+
         ## Selection of a subset of data according to input parameters
         list(data = as.data.frame(tbl), level = level)
     })
-    
+
     ##################################################
     ## Selection of a data subset (highly variable) ##
     ## This subset is for analyses                  ##
@@ -86,14 +86,14 @@ function (input, output) {
         rawData = rawData[rowInd, ]
         return (list(rawData = rawData, data = data))
     })
-    
+
     # ####################################################################
     # ## Selection of a data subset (highly variable)                   ##
     # ## This subset is for showing a data table and downloading a file ##
     # ####################################################################
     # subData1_for_download = eventReactive(input$submit1, {
     #     rawData = data1()$data
-    #     
+    #
     #     ## CV or MAD calcuation is based on log2-transformed intensities
     #     ## but output format is raw-intensity scale
     #     colInd = grep("sig", colnames(rawData))
@@ -109,7 +109,7 @@ function (input, output) {
     #     }
     #     rawData[rowInd, ]
     # })
-    
+
     ##############
     ## PCA plot ##
     ##############
@@ -120,7 +120,7 @@ function (input, output) {
             resPCA = prcomp(t(data), center = TRUE, scale = TRUE)
             eigs = resPCA$sdev ^ 2
             resPCA = data.frame(resPCA$x[, 1:2])
-            
+
             ## Parameter setup for ggplot
             xlabPCA = paste0("PC1 (", round((eigs[1] / sum(eigs)) * 100, 2),"%)")
             ylabPCA = paste0("PC2 (", round((eigs[2] / sum(eigs)) * 100, 2),"%)")
@@ -136,7 +136,7 @@ function (input, output) {
                             axis.title = element_text(size = 14)))
         })
     })
-    
+
     ############################
     ## Heatmap and dendrogram ##
     ############################
@@ -157,7 +157,7 @@ function (input, output) {
                           key.xlab = "scaled intensity")
         })
     })
-    
+
     ################
     ## Data table ##
     ################
@@ -168,7 +168,7 @@ function (input, output) {
         ## for showing a data table
         data = round(2 ** data, digits = 2)
     }, selection = 'single', options = list(autoWidth = FALSE, scrollX = TRUE, pageLength = 5))
-    
+
     ###################################################
     ## Plot of the selected rows from the data table ##
     ###################################################
@@ -182,10 +182,10 @@ function (input, output) {
         if (length(rowInd) == 1) {
             x = as.numeric(data[rowInd, ])
             df = data.frame(samples = colnames(data), intensity = x)
-            g = ggplot(df, aes(x = samples, y = intensity)) + 
-                geom_bar(stat = "identity") + 
+            g = ggplot(df, aes(x = samples, y = intensity)) +
+                geom_bar(stat = "identity") +
                 theme(text = element_text(size = 15),
-                      axis.text.x = element_text(angle = 90, hjust = 1)) + 
+                      axis.text.x = element_text(angle = 90, hjust = 1)) +
                 scale_x_discrete(limits = colnames(data)) +
                 coord_cartesian(ylim = c(0.8 * min(x), max(x)))
             plot(g)
@@ -193,16 +193,16 @@ function (input, output) {
             rowInd = 1
             x = as.numeric(data[rowInd, ])
             df = data.frame(samples = colnames(data), intensity = x)
-            g = ggplot(df, aes(x = samples, y = intensity)) + 
-                geom_bar(stat = "identity") + 
-                theme(text = element_text(size = 15), 
-                      axis.text.x = element_text(angle = 90, hjust = 1)) + 
+            g = ggplot(df, aes(x = samples, y = intensity)) +
+                geom_bar(stat = "identity") +
+                theme(text = element_text(size = 15),
+                      axis.text.x = element_text(angle = 90, hjust = 1)) +
                 scale_x_discrete(limits = colnames(data)) +
                 coord_cartesian(ylim = c(0.8 * min(x), max(x)))
             plot(g)
         }
     })
-    
+
     ########################################################
     ## Download the subset of data (exploratory analysis) ##
     ########################################################
@@ -212,7 +212,7 @@ function (input, output) {
             write.table(subData1()$rawData, file, sep = "\t", row.names = FALSE)
         }
     )
-    
+
     ################################################################
     ################################################################
     ## Supervised analysis, i.e. differential expression analysis ##
@@ -229,7 +229,7 @@ function (input, output) {
         #     tbl = read_excel(inFileName, skip = 1) # Protein publication table
         #     level = "protein"
         # }
-        
+
         ## Server version
         inFileName = input$inputFile2$name
         if (length(grep("pep", inFileName))) {
@@ -239,11 +239,11 @@ function (input, output) {
             tbl = read_excel(input$inputFile2$datapath, skip = 1) # Protein publication table
             level = "protein"
         }
-        
+
         ## Selection of a subset of data according to input parameters
         list(data = as.data.frame(tbl), level = level)
     })
-    
+
     ## Specificiation of groups of samples
     nGroups = reactive(as.integer(input$numGroups2))
     observeEvent(input$inputFile2, {
@@ -258,7 +258,7 @@ function (input, output) {
             })
         })
     })
-    
+
     ################################################
     ## Differentially expressed peptides/proteins ##
     ################################################
@@ -280,7 +280,7 @@ function (input, output) {
         }
         statTest(data, level, comparison)
     })
-    
+
     ##################################################
     ## A subset of data selected based on "statRes" ##
     ##################################################
@@ -349,22 +349,22 @@ function (input, output) {
             colnames(res) = c("logfc", "significance")
             res[, 2] = -log10(res[, 2])
             xlab = "log2(fold-change)"
-            
+
             ## Parameter setup for ggplot
             ratioDisplay = 4/3
             ratioValue = (max(res[, 1]) - min(res[, 1])) / (max(res[, 2]) - min(res[, 2]))
             v = ggplot(data = res, aes(logfc, significance)) +
-                geom_point(alpha = 0.2, size = 2) + 
-                geom_hline(aes(yintercept = -log10(sigCutoff))) + 
-                geom_vline(aes(xintercept = -logFC)) + 
-                geom_vline(aes(xintercept = logFC)) + 
+                geom_point(alpha = 0.2, size = 2) +
+                geom_hline(aes(yintercept = -log10(sigCutoff))) +
+                geom_vline(aes(xintercept = -logFC)) +
+                geom_vline(aes(xintercept = logFC)) +
                 labs(x = xlab, y = ylab) +
-                coord_fixed(ratioValue / ratioDisplay) + 
+                coord_fixed(ratioValue / ratioDisplay) +
                 theme(text = element_text(size = 20))
             plot(v)
         })
     })
-    
+
     ############################################################################
     ## Heatmap of differentially expressed peptides/proteins                  ##
     ## Differentially expressed elements selected by "statRes" should be used ##
@@ -387,7 +387,7 @@ function (input, output) {
                           key.xlab = "scaled intensity")
         })
     })
-    
+
     ############################################################################
     ## Data table                                                             ##
     ## Differentially expressed elements selected by "statRes" should be used ##
@@ -405,7 +405,7 @@ function (input, output) {
         data[, colInd] = round(data[, colInd], digits = 2)
         data
     }, selection = 'single', options = list(autoWidth = FALSE, scrollX = TRUE, pageLength = 5))
-    
+
     ###################################################
     ## Plot of the selected rows from the data table ##
     ###################################################
@@ -421,10 +421,10 @@ function (input, output) {
         if (length(rowInd) == 1) {
             x = as.numeric(data[rowInd, ])
             df = data.frame(samples = colnames(data), intensity = x)
-            g = ggplot(df, aes(x = samples, y = intensity)) + 
-                geom_bar(stat = "identity") + 
+            g = ggplot(df, aes(x = samples, y = intensity)) +
+                geom_bar(stat = "identity") +
                 theme(text = element_text(size = 15),
-                      axis.text.x = element_text(angle = 90, hjust = 1)) + 
+                      axis.text.x = element_text(angle = 90, hjust = 1)) +
                 scale_x_discrete(limits = colnames(data)) +
                 coord_cartesian(ylim = c(0.8 * min(x), max(x)))
             plot(g)
@@ -432,16 +432,16 @@ function (input, output) {
             rowInd = 1
             x = as.numeric(data[rowInd, ])
             df = data.frame(samples = colnames(data), intensity = x)
-            g = ggplot(df, aes(x = samples, y = intensity)) + 
-                geom_bar(stat = "identity") + 
-                theme(text = element_text(size = 15), 
-                      axis.text.x = element_text(angle = 90, hjust = 1)) + 
+            g = ggplot(df, aes(x = samples, y = intensity)) +
+                geom_bar(stat = "identity") +
+                theme(text = element_text(size = 15),
+                      axis.text.x = element_text(angle = 90, hjust = 1)) +
                 scale_x_discrete(limits = colnames(data)) +
                 coord_cartesian(ylim = c(0.8 * min(x), max(x)))
             plot(g)
         }
     })
-    
+
     ####################################################################
     ## Download the subset of data (differential expression analysis) ##
     ####################################################################
@@ -451,82 +451,82 @@ function (input, output) {
             write.table(subData2()$rawData, file, sep = "\t", row.names = FALSE)
         }
     )
-    
-    ######################
-    ## Enrichment study ##
-    ######################
-    enrichmentRes = reactive({
-        if (input$enrichmentSubmit == 0) return ()
-        # Database species
-        if (input$enrichmentSpecies == 1) {
-            orgDb ="org.Hs.eg.db"; orgName = "Homo sapiens"
-        } else if (input$enrichmentSpecies == 2) {
-            orgDb ="org.Mm.eg.db"; orgName = "Mus musculus"
-        } else if (input$enrichmentSpecies == 3) {
-            orgDb ="org.Rn.eg.db"; orgName = "Rattus norvegicus"
-        } else if (input$enrichmentSpecies == 4) {
-            orgDb ="org.Sc.sgd.db"; orgName = "Saccharomyces cerevisiae"
-        } else if (input$enrichmentSpecies == 5) {
-            orgDb ="org.Dm.eg.db"; orgName = "Drosophila melanogaster"
-        } else if (input$enrichmentSpecies == 6) {
-            orgDb ="org.Ce.eg.db"; orgName = "Caenorhabditis elegans"
-        }
-        ## Background genes (optional)
-        bgGenes = NULL
-        bgFileName = input$enrichmentBgGenes$name
-        if (!is.null(bgFileName)) { ## Background prots/genes are specified
-            bgProts = readLines(bgFileName) ## Desktop version
-            # bgProts = readLines(input$enrichmentBgGenes$datapath) ## Server version
-            bgGenes = bitr(bgProts, fromType = "UNIPROT", toType = "SYMBOL", OrgDb = orgDb)
-        }
-        ## Gene set
-        if (input$enrichmentGeneset == 1) {
-            gsCat = "H"
-        } else {
-            gsCat = paste0("C", (as.numeric(input$enrichmentGeneset) - 1))
-        }
-        m_df = msigdbr(species = orgName, category = gsCat)
-        m_t2g = m_df %>% dplyr::select(gs_name, gene_symbol) %>% as.data.frame()
-        ## Convert query protein accessions to gene symbols
-        data = subData2()$data
-        prots = NULL
-        for (i in 1:dim(data)[1]) {
-            prots[i] = unlist(strsplit(rownames(data)[i], '\\|'))[2]
-        }
-        geneSymbols = bitr(prots, fromType = "UNIPROT", toType = "SYMBOL", OrgDb = orgDb)
-        geneSymbols = geneSymbols$SYMBOL
-        ## Enrichment analysis using "clusterProfiler"
-        if (!is.null(bgGenes)) {
-            res = enricher(gene = geneSymbols, TERM2GENE = m_t2g, universe = bgGenes,
-                           pvalueCutoff = 1, qvalueCutoff = 1)
-        } else {
-            res = enricher(gene = geneSymbols, TERM2GENE = m_t2g,
-                           pvalueCutoff = 1, qvalueCutoff = 1)
-        }
-        res = res[, c(3, 4, 5, 6, 9, 8)]
-        names(res) = c("GeneRatio", "BgRatio", "pvalue", "FDR", "Count", "Genes")
-        return (res)
-    })
 
-    output$enrichmentTable = DT::renderDataTable({
-        if (input$enrichmentSubmit == 0) return ()
-        withProgress(message = NULL, detail = "Enrichment analysis", {
-            res = enrichmentRes();
-            incProgress(1, detail = paste("Done"))})
-        # res$pvalue = as.numeric(formatC(res$pvalue, digits = 3))
-        # res$FDR = as.numeric(formatC(res$FDR, digits = 3))
-        res$pvalue = format(res$pvalue, digits = 2)
-        res$FDR = format(res$FDR, digits = 2)
-        res
-    }, options = list(scrollX = TRUE))
-    
-    output$enrichmentDownload = downloadHandler(
-        filename = "DE_enrichment.txt",
-        content = function(file) {
-            data = enrichmentRes()
-            data = cbind(Geneset = rownames(data), data)
-            rownames(data) = NULL
-            write.table(data, file, sep = "\t", quote = F, row.names = F)
-        }
-    )
+    # ######################
+    # ## Enrichment study ##
+    # ######################
+    # enrichmentRes = reactive({
+    #     if (input$enrichmentSubmit == 0) return ()
+    #     # Database species
+    #     if (input$enrichmentSpecies == 1) {
+    #         orgDb ="org.Hs.eg.db"; orgName = "Homo sapiens"
+    #     } else if (input$enrichmentSpecies == 2) {
+    #         orgDb ="org.Mm.eg.db"; orgName = "Mus musculus"
+    #     } else if (input$enrichmentSpecies == 3) {
+    #         orgDb ="org.Rn.eg.db"; orgName = "Rattus norvegicus"
+    #     } else if (input$enrichmentSpecies == 4) {
+    #         orgDb ="org.Sc.sgd.db"; orgName = "Saccharomyces cerevisiae"
+    #     } else if (input$enrichmentSpecies == 5) {
+    #         orgDb ="org.Dm.eg.db"; orgName = "Drosophila melanogaster"
+    #     } else if (input$enrichmentSpecies == 6) {
+    #         orgDb ="org.Ce.eg.db"; orgName = "Caenorhabditis elegans"
+    #     }
+    #     ## Background genes (optional)
+    #     bgGenes = NULL
+    #     bgFileName = input$enrichmentBgGenes$name
+    #     if (!is.null(bgFileName)) { ## Background prots/genes are specified
+    #         bgProts = readLines(bgFileName) ## Desktop version
+    #         # bgProts = readLines(input$enrichmentBgGenes$datapath) ## Server version
+    #         bgGenes = bitr(bgProts, fromType = "UNIPROT", toType = "SYMBOL", OrgDb = orgDb)
+    #     }
+    #     ## Gene set
+    #     if (input$enrichmentGeneset == 1) {
+    #         gsCat = "H"
+    #     } else {
+    #         gsCat = paste0("C", (as.numeric(input$enrichmentGeneset) - 1))
+    #     }
+    #     m_df = msigdbr(species = orgName, category = gsCat)
+    #     m_t2g = m_df %>% dplyr::select(gs_name, gene_symbol) %>% as.data.frame()
+    #     ## Convert query protein accessions to gene symbols
+    #     data = subData2()$data
+    #     prots = NULL
+    #     for (i in 1:dim(data)[1]) {
+    #         prots[i] = unlist(strsplit(rownames(data)[i], '\\|'))[2]
+    #     }
+    #     geneSymbols = bitr(prots, fromType = "UNIPROT", toType = "SYMBOL", OrgDb = orgDb)
+    #     geneSymbols = geneSymbols$SYMBOL
+    #     ## Enrichment analysis using "clusterProfiler"
+    #     if (!is.null(bgGenes)) {
+    #         res = enricher(gene = geneSymbols, TERM2GENE = m_t2g, universe = bgGenes,
+    #                        pvalueCutoff = 1, qvalueCutoff = 1)
+    #     } else {
+    #         res = enricher(gene = geneSymbols, TERM2GENE = m_t2g,
+    #                        pvalueCutoff = 1, qvalueCutoff = 1)
+    #     }
+    #     res = res[, c(3, 4, 5, 6, 9, 8)]
+    #     names(res) = c("GeneRatio", "BgRatio", "pvalue", "FDR", "Count", "Genes")
+    #     return (res)
+    # })
+    # 
+    # output$enrichmentTable = DT::renderDataTable({
+    #     if (input$enrichmentSubmit == 0) return ()
+    #     withProgress(message = NULL, detail = "Enrichment analysis", {
+    #         res = enrichmentRes();
+    #         incProgress(1, detail = paste("Done"))})
+    #     # res$pvalue = as.numeric(formatC(res$pvalue, digits = 3))
+    #     # res$FDR = as.numeric(formatC(res$FDR, digits = 3))
+    #     res$pvalue = format(res$pvalue, digits = 2)
+    #     res$FDR = format(res$FDR, digits = 2)
+    #     res
+    # }, options = list(scrollX = TRUE))
+    # 
+    # output$enrichmentDownload = downloadHandler(
+    #     filename = "DE_enrichment.txt",
+    #     content = function(file) {
+    #         data = enrichmentRes()
+    #         data = cbind(Geneset = rownames(data), data)
+    #         rownames(data) = NULL
+    #         write.table(data, file, sep = "\t", quote = F, row.names = F)
+    #     }
+    # )
 }
