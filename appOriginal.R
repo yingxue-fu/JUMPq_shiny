@@ -1,0 +1,543 @@
+rm(list = ls())
+
+library(shiny)
+library(readxl)
+library(scatterD3)
+library(gplots)
+library(ggplot2)
+library(plotly)
+library(heatmaply)
+library(DT)
+library(curl)
+library(BiocManager)
+options(repos = BiocManager::repositories())
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# BiocManager::install()
+
+source("statTest.R")
+server = function (input, output) {
+    # Increase the maximum size of uploaded file (up to 500MB)
+    options(shiny.maxRequestSize = 500 * (1024 ^ 2))
+    
+    ####################################################
+    # Unsupervised analysis, i.e. explorative analysis #
+    ####################################################
+    # Load JUMP -q output file (either id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx)
+    data1 = reactive ({
+        inFileName = input$inputFile1$name
+        if (length(grep("pep", inFileName))) {
+            tbl = read_excel(input$inputFile1$datapath, skip = 4) # Peptide publication table
+            level = "peptide"
+        } else {
+            tbl = read_excel(input$inputFile1$datapath, skip = 1) # Protein publication table
+            level = "protein"
+        }
+        list(data = as.data.frame(tbl), level = level)
+    })
+    
+    metaData1 = reactive ({
+        data = read.table(input$metaFile1, sep="\t")
+        print()
+    })
+    
+    # Selection of a data subset (highly variable), This subset is for analyses
+    subData1 = eventReactive(input$submit1, {
+        rawData = data1()$data
+        level = data1()$level
+        if (level == "peptide") {
+            entry = rawData[, 1]
+        } else if (level == "protein") {
+            entry = rawData[, 2]
+        }
+        
+        # CV or MAD calcuation is based on log2-transformed intensities, but output format is raw-intensity scale
+        colInd = grep("sig", colnames(rawData))
+        data = log(rawData[, colInd], 2)
+        cv = apply(data, 1, sd) / rowMeans(data)
+        mad = apply(abs(data - apply(data, 1, median)), 1, median)
+        threshold = as.numeric(input$variant1)/ 100 ## Threshold percentage
+        rowInd = NULL
+        if (as.numeric(input$metric1) == 1) {
+            rowInd = cv > quantile(cv, prob = 1 - threshold)
+        } else if (as.numeric(input$metric1) == 2) {
+            rowInd = mad > quantile(mad, prob = 1 - threshold)
+        }
+        
+        # Organize a dataset for subsequent analyses
+        # Column 1: entry (either protein accession or peptide sequence)
+        # Column 2~ : log2-transformed intensity values for reporter ions
+        entry = entry[rowInd]
+        data = log(rawData[rowInd, colInd], 2)
+        rownames(data) = entry
+        
+        # Organize a dataset for downloading
+        colInd = max(grep("sig", colnames(rawData)))
+        rawData = rawData[, 1:colInd] ## Remove statistical analysis results from previous jump -q
+        rawData = rawData[rowInd, ]
+        return (list(rawData = rawData, data = data))
+    })
+    
+    # # PCA plot
+    # output$pcaPlot = renderPlot({
+    #     data = subData1()$data
+    #     # Preparation of PCA result for visualization
+    #     resPCA = prcomp(t(data), center = TRUE, scale = TRUE)
+    #     eigs = resPCA$sdev ^ 2
+    #     resPCA = data.frame(resPCA$x[, 1:2])
+    #     
+    #     # Parameter setup for ggplot
+    #     xlabPCA = paste0("PC1 (", round((eigs[1] / sum(eigs)) * 100, 2),"%)")
+    #     ylabPCA = paste0("PC2 (", round((eigs[2] / sum(eigs)) * 100, 2),"%)")
+    #     ratioDisplay = 4/3
+    #     ratioValue = (max(resPCA$PC1) - min(resPCA$PC1)) / (max(resPCA$PC2) - min(resPCA$PC2))
+    #     g = ggplot(resPCA[, 1:2], aes(PC1, PC2), environment = globalenv()) +
+    #         geom_jitter(size = 3) +
+    #         geom_text(aes(label = rownames(resPCA)), vjust = "inward", hjust = "inward", size = 5) +
+    #         labs(x = xlabPCA, y = ylabPCA) +
+    #         coord_fixed(ratioValue / ratioDisplay) +
+    #         theme(text = element_text(size = 12),
+    #               axis.text = element_text(size = 14),
+    #               axis.title = element_text(size = 14))
+    #     plot(g)
+    # })
+    
+    # PCA plot
+    output$pcaPlot <- renderScatterD3({
+        data = subData1()$data
+        # Preparation of PCA result for visualization
+        res = prcomp(t(data), center = TRUE, scale = TRUE)
+        eigs = res$sdev ^ 2
+        res = data.frame(res$x[, 1:2])
+        scatterD3(x = res$PC1,
+                  y = res$PC2,
+                  lab = rownames(res),
+                  xlab = "PC1",
+                  ylab = "PC2",
+                  key_var = rownames(res),
+                  zoom_on = NULL,
+                  zoom_on_level = 3,
+                  labels_positions = "auto",
+                  # point_opacity = input$scatterD3_opacity,
+                  # labels_size = input$scatterD3_labsize,
+                  transitions = TRUE,
+                  left_margin = 90,
+                  lasso = TRUE)
+    })
+    
+    # Heatmap and dendrogram
+    # output$hclustPlot = renderPlot({
+    #     # heatmap.2 from gplots package
+    #     data = subData1()$data
+    #     mat = as.matrix(data)
+    #     mat = t(scale(t(mat), center = T, scale = F)) # Only mean-centering
+    # 
+    #     myColor = colorRampPalette(c("blue", "white", "red"))(n = 100)
+    #     limVal = round(min(abs(min(mat)), abs(max(mat))))
+    #     myBreaks = seq(-limVal, limVal, length.out = 101)
+    #     par(oma = c(10, 3, 1, 3), mar = c(1, 1, 1, 1))
+    #     h = heatmap.2(x = mat, density.info = "n", trace = "n", labRow = F, col = myColor,
+    #                   hclust = function(x) hclust(x, method = "ward.D2"),
+    #                   lhei = c(1, 6.5), lwid = c(2, 10), breaks = myBreaks,
+    #                   key.par = list(mar= c(5, 0, 0, 0)), key.title = NA,
+    #                   key.xlab = "scaled intensity")
+    # })
+        
+    output$hclustPlot = renderPlotly({
+        # Heatmaply
+        data = subData1()$data
+        mat = as.matrix(data)
+        p = heatmaply(mat, 
+                      color = RdBu(50),
+                      xlab = "", ylab = "", 
+                      main = "",
+                      scale = "row",
+                      margins = c(60,100,40,20),
+                      width = 400,
+                      height = 800,
+                      column_text_angle = 90,
+                      # grid_color = "white",
+                      # grid_width = 0.00001,
+                      titleX = FALSE,
+                      hide_colorbar = FALSE,
+                      branches_lwd = 0.1,
+                      # label_names = c("Country", "Feature:", "Value"),
+                      fontsizep_row = 5, fontsize_col = 10,
+                      labCol = colnames(mat),
+                      # labRow = rownames(mat),
+                      showticklabels = c(TRUE, FALSE),
+                      plot_method = "ggplot"
+                      # heatmap_layers = theme(axis.line=element_blank())
+        )
+    })
+    
+    # Data table
+    output$dataTable1 = DT::renderDataTable({
+        data = subData1()$data
+        ## Since data is log2-transformed,
+        ## it needs to be re-transformed to raw-scale intensity levels
+        ## for showing a data table
+        data = round(2 ** data, digits = 2)
+    }, selection = 'single', options = list(autoWidth = FALSE, scrollX = TRUE, pageLength = 5))
+    
+    # Plot of the selected rows from the data table
+    output$plotDataTable1 = renderPlot({
+        data = subData1()$data
+        
+        # Since data is log2-transformed, it needs to be re-transformed to the raw-scale intensity levels for a data table
+        data = round(2 ** data, digits = 2)
+        rowInd = input$dataTable1_rows_selected
+        if (length(rowInd) == 1) {
+            x = as.numeric(data[rowInd, ])
+            df = data.frame(samples = colnames(data), intensity = x)
+            g = ggplot(df, aes(x = samples, y = intensity)) +
+                geom_bar(stat = "identity") +
+                theme(text = element_text(size = 15),
+                      axis.text.x = element_text(angle = 90, hjust = 1)) +
+                scale_x_discrete(limits = colnames(data)) +
+                coord_cartesian(ylim = c(0.8 * min(x), max(x)))
+            plot(g)
+        } else {
+            rowInd = 1
+            x = as.numeric(data[rowInd, ])
+            df = data.frame(samples = colnames(data), intensity = x)
+            g = ggplot(df, aes(x = samples, y = intensity)) +
+                geom_bar(stat = "identity") +
+                theme(text = element_text(size = 15),
+                      axis.text.x = element_text(angle = 90, hjust = 1)) +
+                scale_x_discrete(limits = colnames(data)) +
+                coord_cartesian(ylim = c(0.8 * min(x), max(x)))
+            plot(g)
+        }
+    })
+    
+    # Download the subset of data (exploratory analysis)
+    output$download1 = downloadHandler(
+        filename = "exploratory_subset.txt",
+        content = function(file) {
+            write.table(subData1()$rawData, file, sep = "\t", row.names = FALSE)
+        }
+    )
+    
+    ##############################################################
+    # Supervised analysis, i.e. differential expression analysis #
+    ##############################################################
+    # Load JUMP -q output file (either id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx)
+    data2 = reactive ({
+        inFileName = input$inputFile2$name
+        if (length(grep("pep", inFileName))) {
+            tbl = read_excel(input$inputFile2$datapath, skip = 4) # Peptide publication table
+            level = "peptide"
+        } else {
+            tbl = read_excel(input$inputFile2$datapath, skip = 1) # Protein publication table
+            level = "protein"
+        }
+        list(data = as.data.frame(tbl), level = level)
+    })
+    
+    # Specificiation of groups of samples
+    nGroups = reactive(as.integer(input$numGroups2))
+    observeEvent(input$inputFile2, {
+        output$groups2 = renderUI({
+            data = data2()$data
+            nGroups = nGroups()
+            colSampleNames = grep('sig', colnames(data))
+            sampleNames = colnames(data)[colSampleNames]
+            lapply (1:nGroups, function(i) {
+                checkboxGroupInput(inputId = paste0("Group", i), label = paste("Group", i),
+                                   choiceNames = as.list(sampleNames), choiceValues = as.list(sampleNames))
+            })
+        })
+    })
+    
+    # Differentially expressed peptides/proteins
+    statRes = eventReactive(input$submit2, {
+        data = data2()$data
+        level = data2()$level
+        nGroups = nGroups()
+        comparison = as.character()
+        compSamples = as.character()
+        for (g in 1:nGroups) {
+            groupName = paste0("Group", g)
+            comparison[g] = paste(input[[groupName]], collapse = ",")
+        }
+        groups = list()
+        compSamples = NULL
+        for (g in 1:nGroups) {
+            groups[[g]] = unlist(strsplit(comparison[g], ","))
+            compSamples = c(compSamples, groups[[g]])
+        }
+        statTest(data, level, comparison)
+    })
+    
+    # A subset of data selected based on "statRes"
+    subData2 = eventReactive(input$submit2, {
+        nGroups = nGroups()
+        statRes = statRes()
+        
+        # Load data (for download and analysis, separately)
+        rawData = data2()$data
+        data = statRes$data
+        
+        # Handle threshold inputs
+        logFC = input$logfc2
+        sigMetric = input$metric2
+        sigCutoff = input$cutoff2
+        resLogFC = statRes$res[, grep("Log2Fold", colnames(statRes$res))]
+        if (nGroups > 2) {
+            absLogFC = apply(cbind(abs(apply(resLogFC, 1, min)), abs(apply(resLogFC, 1, max))), 1, max)
+        } else {
+            absLogFC = abs(resLogFC)
+        }
+        
+        # Select DE peptides/proteins and organize a dataset for subsequent analyses
+        rowInd = which(statRes$res[[sigMetric]] < sigCutoff & absLogFC >= logFC)
+        if (nGroups == 2) {
+            data = cbind(data, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR, Log2Fold = resLogFC)
+        } else if (nGroups > 2) {
+            data = cbind(data, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR)
+            data = cbind(data, resLogFC)
+        }
+        data = data[rowInd, ]
+        data = data[order(data$`p-value`), ]
+        
+        # Organize a dataset for downloading
+        colInd = max(grep("sig[0-9]{3}", colnames(rawData))) # Last column index for reporters
+        rawData = rawData[, 1:colInd] # Remove statistical analysis results from jump -q
+        if (nGroups == 2) {
+            rawData = cbind(rawData, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR, Log2Fold = resLogFC)
+        } else if (nGroups > 2) {
+            rawData = cbind(rawData, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR)
+            rawData = cbind(rawData, resLogFC)
+        }
+        rawData = rawData[rowInd, ]
+        return (list(rawData = rawData, data = data))
+    })
+    
+    # Volcano plot of differential expression analysis ("statRes" is directly used)
+    output$volcanoPlot = renderPlot({
+        # Preparation of PCA result for visualization
+        res = statRes()$res
+        logFC = input$logfc2
+        sigMetric = input$metric2
+        sigCutoff = input$cutoff2
+        if (sigMetric == "p-value") {
+            res = res[, 2:3]
+            ylab = "-log10(p-value)"
+        } else if (sigMetric == "FDR") {
+            res = res[, c(2, 4)]
+            ylab = "-log10(FDR)"
+        }
+        colnames(res) = c("logfc", "significance")
+        res[, 2] = -log10(res[, 2])
+        xlab = "log2(fold-change)"
+        
+        # Parameter setup for ggplot
+        ratioDisplay = 4/3
+        ratioValue = (max(res[, 1]) - min(res[, 1])) / (max(res[, 2]) - min(res[, 2]))
+        v = ggplot(data = res, aes(logfc, significance)) +
+            geom_point(alpha = 0.2, size = 2) +
+            geom_hline(aes(yintercept = -log10(sigCutoff))) +
+            geom_vline(aes(xintercept = -logFC)) +
+            geom_vline(aes(xintercept = logFC)) +
+            labs(x = xlab, y = ylab) +
+            coord_fixed(ratioValue / ratioDisplay) +
+            theme(text = element_text(size = 20))
+        plot(v)
+    })
+    
+    # Heatmap of differentially expressed peptides/proteins (differentially expressed elements selected by "statRes" should be used)
+    output$hclustDE = renderPlot({
+        data = subData2()$data
+        colInd = grep('^sig[0-9]{3}', colnames(data))
+        data = data[, colInd]
+        mat = as.matrix(data)
+        mat = t(scale(t(mat), center = T, scale = F)) # Only mean-centering
+        limVal = round(min(abs(min(mat, na.rm = T)), abs(max(mat, na.rm = T))))
+        myBreaks = seq(-limVal, limVal, length.out = 101)
+        myColor <- colorRampPalette(c("blue", "white", "red"))(n = 100)
+        par(oma = c(10, 3, 1, 3), mar = c(1, 1, 1, 1))
+        h = heatmap.2(x = mat, density.info = "n", trace = "n", labRow = F, col = myColor,
+                      hclust = function(x) hclust(x, method = "ward.D2"),
+                      lhei = c(1, 6.5), lwid = c(2, 10), breaks = myBreaks,
+                      key.par = list(mar= c(5, 0, 0, 0)), key.title = NA,
+                      key.xlab = "scaled intensity")
+    })
+    
+    # Data table
+    output$dataTable2 = DT::renderDT({
+        ## Since data is log2-transformed, it needs to be re-transformed to raw-scale intensity levels for a data table
+        data = subData2()$data
+        colInd = grep('^sig[0-9]{3}', colnames(data))
+        data[, colInd] = round(2 ** data[, colInd], digits = 2)
+        data$`p-value` = format(data$`p-value`, digits = 3)
+        data$FDR = format(data$FDR, digits = 3)
+        colInd = grep('Log2Fold', colnames(data))
+        data[, colInd] = round(data[, colInd], digits = 2)
+        data
+    }, selection = 'single', options = list(autoWidth = FALSE, scrollX = TRUE, pageLength = 5))
+    
+    # Plot of the selected rows from the data table
+    output$plotDataTable2 = renderPlot({
+        data = subData2()$data
+        colInd = grep('^sig[0-9]{3}', colnames(data))
+        data = data[, colInd]
+        data = round(2 ** data, digits = 2)
+        rowInd = input$dataTable2_rows_selected
+        if (length(rowInd) == 1) {
+            x = as.numeric(data[rowInd, ])
+            df = data.frame(samples = colnames(data), intensity = x)
+            g = ggplot(df, aes(x = samples, y = intensity)) +
+                geom_bar(stat = "identity") +
+                theme(text = element_text(size = 15),
+                      axis.text.x = element_text(angle = 90, hjust = 1)) +
+                scale_x_discrete(limits = colnames(data)) +
+                coord_cartesian(ylim = c(0.8 * min(x), max(x)))
+            plot(g)
+        } else {
+            rowInd = 1
+            x = as.numeric(data[rowInd, ])
+            df = data.frame(samples = colnames(data), intensity = x)
+            g = ggplot(df, aes(x = samples, y = intensity)) +
+                geom_bar(stat = "identity") +
+                theme(text = element_text(size = 15),
+                      axis.text.x = element_text(angle = 90, hjust = 1)) +
+                scale_x_discrete(limits = colnames(data)) +
+                coord_cartesian(ylim = c(0.8 * min(x), max(x)))
+            plot(g)
+        }
+    })
+    
+    # Download the subset of data (differential expression analysis)
+    output$download2 = downloadHandler(
+        filename = "DE_proteins.txt",
+        content = function(file) {
+            write.table(subData2()$rawData, file, sep = "\t", row.names = FALSE)
+        }
+    )
+}
+
+ui = fluidPage(
+    tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")),
+    navbarPage(
+        "Quantitative analysis of a TMT dataset (jump -q)",
+        #############################
+        # Exploratory data analysis #
+        #############################
+        tabPanel(
+            "Exploratory data analysis",
+            # Sidebar panel controlling an exploratory data analysis
+            sidebarPanel(
+                tags$head(tags$style(HTML('h5 {margin-bottom:0px; margin-top:0px;}'))), width = 3,
+                p("1. PCA (principal component analysis) plot of samples", br(),
+                  "2. Hierarchical clustering result of samples and peptides/proteins", br(),
+                  "3. Data table of highly variant peptides/proteins"),
+                br(),
+                fileInput("inputFile1", 
+                          label = HTML("Choose a file<h5>id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx</h5>")),
+                fileInput("metaFile1",
+                          label = HTML("Choose a file<h5>(optional) upload a file containing sample information, if necessary")),
+                numericInput("variant1",
+                             label = HTML("Proportion of highly variant elements<h5>(if you choose 10, top 10% of highly variant peptides/proteins will be used)</h5>"),
+                             value = 10),
+                selectInput("metric1", label = "Select the measure of variation",
+                            choice = list("Coefficient of variation (CV)" = 1, "Median absolute deviation (MAD)" = 2), selected = 1),
+                actionButton("submit1", "Submit")
+            ), # end of sidebarPanel
+            
+            # Main panel showing the results of the exploratory data analysis
+            mainPanel(
+                tabsetPanel(
+                    tabPanel("Principal component analysis (PCA)", br(), 
+                             scatterD3Output("pcaPlot", height = "500px", width = "700px")),
+                    tabPanel("Heatmap of the subset of peptides/proteins", br(), align = "center", 
+                             plotlyOutput("hclustPlot", height = "700px", width = "500px")),
+                    tabPanel("Data table", br(), 
+                             DT::dataTableOutput("dataTable1"), br(), 
+                             downloadButton("download1", "Download"), br(), 
+                             plotOutput("plotDataTable1"))
+                )
+            ) # end of mainPanel
+        ), # end of tabPanel
+        
+        ####################################
+        # Differential expression analysis #
+        ####################################
+        tabPanel(
+            "Differential expression",
+            # Sidebar panel controlling an exploratory data analysis
+            sidebarPanel(
+                width = 3,
+                # conditionalPanel(
+                #     condition = 'input.DE == "Functional enrichment"',
+                #     p("This panel performs functional enrichment analyses using differentially expressed proteins.", br(),
+                #       "Genesets are from Molecular Signatures Database (MSigDB) curated by Broad institute"),
+                #     br(),
+                #     selectInput(
+                #         "enrichmentSpecies",
+                #         label = "1. Select species",
+                #         choice = list("Homo sapiens" = 1,
+                #                       "Mus musculus" = 2,
+                #                       "Rattus norvegicus" = 3,
+                #                       "Saccharomyces cerevisiae" = 4,
+                #                       "Drosophila melanogaster" = 5,
+                #                       "Caenorhabditis elegans" = 6),
+                #         selected = 1),
+                #     fileInput(
+                #         "enrichmentBgGenes",
+                #         label = HTML("2. Background genes<h5>
+                #                      (If you want to specify background genes,
+                #                      please upload a .txt file containing
+                #                      UniProt accession numbers)</h5>")),
+                #     selectInput(
+                #         "enrichmentGeneset",
+                #         label = HTML("3. Select database category<h5>
+                #                      (The Molecular Signatures Database, MSigDB,
+                #                      is a collection of 8 annotated gene sets)</h5>"),
+                #         choice = list("H: hallmark gene sets" = 1,
+                #                       "C1: positional gene sets" = 2,
+                #                       "C2: curated gene sets (pathways)" = 3,
+                #                       "C3: motif gene sets" = 4,
+                #                       "C4: computational gene sets" = 5,
+                #                       "C5: GO gene sets" = 6,
+                #                       "C6: oncogenic gene sets" = 7,
+                #                       "C7: immunologic gene sets" = 8),
+                #         selected = 1),
+                #     actionButton("enrichmentSubmit", "Submit")
+                #     ),
+                conditionalPanel(
+                    condition = 'input.DE != "Functional enrichment"',
+                    p("1. For two group comparison, a volcano plot and heatmap will be provided", br(),
+                      "2. For three or more group comparison, a heatmap will be provided", br(),
+                      "3. Data table of differentially expressed peptides/proteins", br(),
+                      "4. Functional enrichment study of differentially expressed proteins"),
+                    br(),
+                    fileInput("inputFile2", label = HTML("Choose a file<h5>id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx</h5>")),
+                    numericInput("numGroups2", label = "Number of groups", value = 2),
+                    uiOutput("groups2"),
+                    selectInput("metric2", label = "Select the measure of significance", choice = list("p-value" = "p-value", "FDR" = "FDR"), selected = 1),
+                    numericInput("cutoff2", label = "Significance level", min = 0, max = 1, step = 0.01, value = 0.05),
+                    numericInput("logfc2", label = "Log2-fold cutoff", value = 1),
+                    actionButton("submit2", "Submit")
+                )
+            ),
+            
+            # Main panel showing the results of the differential expression analysis
+            mainPanel(
+                tabsetPanel(
+                    id = "DE",
+                    tabPanel(
+                        "Volcano plot", br(), 
+                        conditionalPanel("input.numGroups2 == 2", plotOutput("volcanoPlot")),
+                        conditionalPanel("input.numGroups2 > 2", h5("Volcano plot is not available for more than two groups"))
+                    ),
+                    tabPanel("Heatmap of differentially expressed peptides/proteins", br(), align = "center", plotOutput("hclustDE", height = "700px", width = "500px")),
+                    tabPanel("Data table", br(), br(), DT::dataTableOutput("dataTable2"), br(), downloadButton("download2", "Download"), br(), plotOutput("plotDataTable2"))
+                    # tabPanel("Functional enrichment", br(), br(), DT::dataTableOutput("enrichmentTable"), br(), downloadButton("enrichmentDownload", "Download"))
+                )
+            )
+        )
+    )
+)
+
+shinyApp(ui = ui, server = server)
