@@ -29,7 +29,7 @@ limmaTest <- function(data, level, samples, comparison, comparisonNames, design,
     result$B = NULL
     result$AveExpr = NULL
     result$t = NULL
-    result$F = NULL
+    result$`F` = NULL
     colnames(result)[which(names(result) == "P.Value")] = "p-value"
     colnames(result)[which(names(result) == "adj.P.Value")] = "FDR"
     colnames(result)[which(names(result) == "adj.P.Val")] = "FDR"

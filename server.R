@@ -378,35 +378,64 @@ server = function (input, output, session) {
     })
     
     # Volcano plot of differential expression analysis ("statRes" is directly used)
-    output$volcanoPlot = renderPlot({
-        # Preparation of PCA result for visualization
+    output$volcanoPlot = renderPlotly({
+        # Preparation of the statistical testing result for visualization
         res = statRes()$res
         logFC = input$logfc2
         sigMetric = input$metric2
         sigCutoff = input$cutoff2
         if (sigMetric == "p-value") {
-            res = res[, 2:3]
+            # res = res[, 2:3]
+            res[, 4] = NULL
             ylab = "-log10(p-value)"
         } else if (sigMetric == "FDR") {
-            res = res[, c(2, 4)]
+            # res = res[, c(2, 4)]
+            res[, 3] = NULL
             ylab = "-log10(FDR)"
         }
-        colnames(res) = c("logfc", "significance")
-        res[, 2] = -log10(res[, 2])
+        colnames(res) = c("id", "logfc", "significance")
+        # res[, 2] = -log10(res[, 2])
         xlab = "log2(fold-change)"
+        xmin = min(res$logfc)
+        xmax = max(res$logfc)
+        ymin = 0
+        ymax = max(-log10(res$significance))
         
-        # Parameter setup for ggplot
-        ratioDisplay = 4/3
-        ratioValue = (max(res[, 1]) - min(res[, 1])) / (max(res[, 2]) - min(res[, 2]))
-        v = ggplot(data = res, aes(logfc, significance)) +
-            geom_point(alpha = 0.2, size = 2) +
-            geom_hline(aes(yintercept = -log10(sigCutoff))) +
-            geom_vline(aes(xintercept = -logFC)) +
-            geom_vline(aes(xintercept = logFC)) +
-            labs(x = xlab, y = ylab) +
-            coord_fixed(ratioValue / ratioDisplay) +
-            theme(text = element_text(size = 20))
-        plot(v)
+        # # Parameter setup for ggplot
+        # ratioDisplay = 4/3
+        # ratioValue = (max(res[, 1]) - min(res[, 1])) / (max(res[, 2]) - min(res[, 2]))
+        # v = ggplot(data = res, aes(logfc, significance)) +
+        #     geom_point(alpha = 0.2, size = 2) +
+        #     geom_hline(aes(yintercept = -log10(sigCutoff))) +
+        #     geom_vline(aes(xintercept = -logFC)) +
+        #     geom_vline(aes(xintercept = logFC)) +
+        #     labs(x = xlab, y = ylab) +
+        #     coord_fixed(ratioValue / ratioDisplay) +
+        #     theme(text = element_text(size = 20))
+        # plot(v)
+        
+        fig = plot_ly(data = res)
+        fig = fig %>% add_trace(x = ~logfc, y = ~significance,
+                                text = res[, 1],
+                                type = "scatter", 
+                                mode = "markers",
+                                marker = list(size = 5, color = 'rgb(50, 50, 50)', opacity = 0.5),
+                                hovertemplate = paste("ID: %{text}",
+                                                      "<br>Log2fold: %{x:.4f}", 
+                                                      "<br>sig. level: %{y}<extra></extra>"),
+                                showlegend = FALSE
+                                )
+        fig = fig %>% add_segments(x = -logFC, xend = -logFC, y = ymin, yend = ymax, 
+                                   line = list(dash = "dash", color = "black"),
+                                   showlegend = FALSE)
+        fig = fig %>% add_segments(x = logFC, xend = logFC, y = ymin, yend = ymax, 
+                                   line = list(dash = "dash", color = "black"),
+                                   showlegend = FALSE)
+        fig = fig %>% add_segments(x = xmin, xend = xmax, y = sigCutoff, yend = sigCutoff, 
+                                   line = list(dash = "dash", color = "black"),
+                                   showlegend = FALSE)
+        fig = fig %>% layout(yaxis = list(type = "log", autorange = "reversed", tickformat = ".2e"),
+                             showlegend = FALSE)
     })
     
     # Heatmap of differentially expressed peptides/proteins (differentially expressed elements selected by "statRes" should be used)
@@ -417,16 +446,6 @@ server = function (input, output, session) {
         mat = as.matrix(data)
         mat = t(scale(t(mat), center = T, scale = F)) # Only mean-centering
         
-        # limVal = round(min(abs(min(mat, na.rm = T)), abs(max(mat, na.rm = T))))
-        # myBreaks = seq(-limVal, limVal, length.out = 101)
-        # myColor <- colorRampPalette(c("blue", "white", "red"))(n = 100)
-        # par(oma = c(10, 3, 1, 3), mar = c(1, 1, 1, 1))
-        # h = heatmap.2(x = mat, density.info = "n", trace = "n", labRow = F, col = myColor,
-        #               hclust = function(x) hclust(x, method = "ward.D2"),
-        #               lhei = c(1, 6.5), lwid = c(2, 10), breaks = myBreaks,
-        #               key.par = list(mar= c(5, 0, 0, 0)), key.title = NA,
-        #               key.xlab = "scaled intensity")
-        
         # Heatmap options
         limVal = round(min(abs(min(mat)), abs(max(mat))))
         myColor = colorRamp2(c(-limVal, 0, limVal), c("blue", "white", "red"), space = "RGB")
@@ -436,12 +455,6 @@ server = function (input, output, session) {
                 clusterColumns = F
             }
         }
-        # topAnnot = NULL
-        # if (!is.null(input$hClusterTA2)) {
-        #     if (input$hClusterTA2 != "None") {
-        #         topAnnot = HeatmapAnnotation(sample_information = dfSample[[input$hClusterTA2]], name = input$hClusterTA2)
-        #     }
-        # }
         clusterDistance = "euclidean"
         if (!is.null(input$hClusterDistance2)) {
             clusterDistance = input$hClusterDistance2
@@ -480,7 +493,6 @@ server = function (input, output, session) {
                          legend_height = unit(5, "cm"),
                          title_position = "leftcenter-rot"
                      ),
-                     # top_annotation = topAnnot
         )
         ht = draw(ht)
     })
@@ -491,16 +503,7 @@ server = function (input, output, session) {
             selectInput("hClusterColumn2", "Cluster colunms?",
                         choices = c("Yes", "No"), 
                         selected = "Yes")
-            # checkboxInput("hClusterColumn", label = "Cluster columns?", value = TRUE)
         })
-        # output$hClusterTA2 = renderUI({
-        #     df = metaData2()
-        #     vars = setdiff(colnames(df), "ID")
-        #     vars = c("None", vars)
-        #     selectInput("hClusterTA2", "Column annotation variable",
-        #                 choices = vars,
-        #                 selected = "None")
-        # })
         output$hClusterDistance2 = renderUI({
             selectInput("hClusterDistance2", "Distance metric for clustering",
                         choices = c("euclidean", "manhattan", "pearson", "spearman"),

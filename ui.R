@@ -124,9 +124,9 @@ fluidPage(
             mainPanel(
                 tabsetPanel(
                     id = "DE",
-                    tabPanel(
-                        "Volcano plot", br(),
-                        conditionalPanel("input.numGroups2 == 2", plotOutput("volcanoPlot")),
+                    tabPanel("Volcano plot", br(),
+                        # conditionalPanel("input.numGroups2 == 2", plotOutput("volcanoPlot")),
+                        conditionalPanel("input.numGroups2 == 2", plotlyOutput("volcanoPlot", height = "500px", width = "700px")),
                         conditionalPanel("input.numGroups2 > 2", h5("Volcano plot is not available for more than two groups"))
                     ),
                     tabPanel("Heatmap of differentially expressed peptides/proteins", br(), 
