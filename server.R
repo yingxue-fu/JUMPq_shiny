@@ -4,7 +4,7 @@ library(scatterD3)
 library(gplots)
 library(ggplot2)
 library(plotly)
-library(heatmaply)
+# library(heatmaply)
 library(InteractiveComplexHeatmap)
 library(ComplexHeatmap)
 library(circlize)
@@ -14,8 +14,7 @@ library(curl)
 source("preprocess.R")
 source("statTest.R")
 server = function (input, output, session) {
-    # Increase the maximum size of uploaded file (up to 500MB)
-    options(shiny.maxRequestSize = 500 * (1024 ^ 2))
+    options(shiny.maxRequestSize = 500 * (1024 ^ 2))    # Increase the maximum size of uploaded file (up to 500MB)
     
     ####################################################
     # Unsupervised analysis, i.e. explorative analysis #
@@ -59,6 +58,7 @@ server = function (input, output, session) {
     # PCA plot #
     ############
     output$pcaPlot = renderScatterD3({
+        # Data processing
         df = subData1()$data
         dfSample = subData1()$sampleInfo
         res = prcomp(t(df), center = TRUE, scale = TRUE)
@@ -67,7 +67,7 @@ server = function (input, output, session) {
         xlab = paste0("PC1 (", round((eigs[1] / sum(eigs)) * 100, 2),"%)")
         ylab = paste0("PC2 (", round((eigs[2] / sum(eigs)) * 100, 2),"%)")
         
-        # Plot options
+        # Score plot options
         if (!is.null(input$pcaPointColor)) {
             col_var = dfSample[[input$pcaPointColor]]
             col_lab = input$pcaPointColor
@@ -84,6 +84,7 @@ server = function (input, output, session) {
         }
         point_opacity = input$pcaPointOpacity
         
+        # PCA score plot using scatterD3
         scatterD3(x = res$PC1,
                   y = res$PC2,
                   lab = rownames(res),
@@ -128,11 +129,12 @@ server = function (input, output, session) {
                         min = 0, max = 1, step = 0.1, value = 1)
         })
     })
-
+    
     ##########################
     # Heatmap and dendrogram #
     ##########################
     output$hclustPlot = renderPlot({
+        # Data processing
         df = subData1()$data
         dfSample = subData1()$sampleInfo
         mat = as.matrix(df)
@@ -174,6 +176,7 @@ server = function (input, output, session) {
             }
         }
         
+        # Heatmap using ComplexHeatmap::Heatmap
         ht = Heatmap(mat,
                      col = myColor,
                      cluster_columns = clusterColumns,
@@ -235,19 +238,17 @@ server = function (input, output, session) {
     # Data table #
     ##############
     output$dataTable1 = DT::renderDataTable({
+        # Data processing
         data = subData1()$data
-        ## Since data is log2-transformed,
-        ## it needs to be re-transformed to raw-scale intensity levels
-        ## for showing a data table
-        data = round(2 ** data, digits = 2)
-    }, selection = 'single', options = list(autoWidth = FALSE, scrollX = TRUE, pageLength = 5))
+        data = round(2 ** data, digits = 2)    # Re-transformation of log2-transformed data to 'raw'-scale 
+    }, selection = 'single', options = list(autoWidth = FALSE, scrollX = TRUE, pageLength = 5)
+    )
     
     # Plot of the selected rows from the data table
     output$plotDataTable1 = renderPlot({
+        # Data processing
         data = subData1()$data
-        
-        # Since data is log2-transformed, it needs to be re-transformed to the raw-scale intensity levels for a data table
-        data = round(2 ** data, digits = 2)
+        data = round(2 ** data, digits = 2)    # Re-transformation of log2-transformed data to 'raw'-scale 
         rowInd = input$dataTable1_rows_selected
         if (length(rowInd) == 1) {
             x = as.numeric(data[rowInd, ])
@@ -285,8 +286,7 @@ server = function (input, output, session) {
     # Supervised analysis, i.e. differential expression analysis #
     ##############################################################
     # Load JUMP -q output file (either id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx)
-   
-    data2 = reactive ({
+    rawData2 = reactive ({
         inFileName = input$inputFile2$name
         if (length(grep("pep", inFileName))) {
             tbl = read_excel(input$inputFile2$datapath, skip = 4) # Peptide publication table
@@ -297,50 +297,65 @@ server = function (input, output, session) {
         }
         list(data = as.data.frame(tbl), level = level)
     })
+
+    
+    # Load a file containing sample information
+    # Column 1: ID = should be the same as the sample labels in JUMP -q output file
+    # Column 2~: Any column name is possible, and sample information can be put as text
+    metaData2 = reactive ({
+        if (!is.null(input$metaFile2)) {
+            read.table(input$metaFile2$datapath, sep="\t", header=T)
+        } else {
+            NULL
+        }
+    })
     
     # Specificiation of groups of samples
-    nGroups = reactive(as.integer(input$numGroups2))
-    observeEvent(input$inputFile2, {
-        output$groups2 = renderUI({
-            data = data2()$data
-            nGroups = nGroups()
-            colSampleNames = grep('sig', colnames(data))
-            sampleNames = colnames(data)[colSampleNames]
-            lapply (1:nGroups, function(i) {
-                checkboxGroupInput(inputId = paste0("Group", i), label = paste("Group", i),
-                                   choiceNames = as.list(sampleNames), choiceValues = as.list(sampleNames))
-            })
-        })
+    output$groups2 = renderUI({
+        df = metaData2()
+        vars = setdiff(colnames(df), "ID")
+        vars = c("None", vars)
+        selectInput("groups2", "Grouping variable",
+                    choices = vars, selected = vars[1])
+    })
+
+    # Preprocessing of data
+    data2 = eventReactive(input$submit2, {
+        df = rawData2()$data
+        dfSample = metaData2()
+        level = rawData2()$level
+        metric = NULL
+        pct = NULL
+        res = preprocess(df, level, metric, pct)
+        return (list(rawData = res$rawData, data = res$data, level = res$level, sampleInfo = dfSample))
     })
     
     # Differentially expressed peptides/proteins
     statRes = eventReactive(input$submit2, {
-        data = data2()$data
+        # Data processing
+        df = data2()$data
         level = data2()$level
-        nGroups = nGroups()
+        dfSample = data2()$sampleInfo
+
+        # Preparation of a statistical testing
         comparison = as.character()
-        compSamples = as.character()
+        factors = unique(dfSample[[input$groups2]])
+        nGroups = length(factors)
         for (g in 1:nGroups) {
             groupName = paste0("Group", g)
-            comparison[g] = paste(input[[groupName]], collapse = ",")
+            comparison[g] = paste(dfSample$ID[dfSample[[input$groups2]] == factors[g]], collapse = ",")
         }
-        groups = list()
-        compSamples = NULL
-        for (g in 1:nGroups) {
-            groups[[g]] = unlist(strsplit(comparison[g], ","))
-            compSamples = c(compSamples, groups[[g]])
-        }
-        statTest(data, level, comparison)
+        statTest(df, level, comparison)
     })
     
     # A subset of data selected based on "statRes"
     subData2 = eventReactive(input$submit2, {
-        nGroups = nGroups()
+        # Data processing
         statRes = statRes()
-        
-        # Load data (for download and analysis, separately)
-        rawData = data2()$data
-        data = statRes$data
+        dfRaw = data2()$rawData
+        exprs = statRes$data
+        dfSample = data2()$sampleInfo
+        nGroups = length(unique(dfSample[[input$groups2]]))
         
         # Handle threshold inputs
         logFC = input$logfc2
@@ -356,67 +371,57 @@ server = function (input, output, session) {
         # Select DE peptides/proteins and organize a dataset for subsequent analyses
         rowInd = which(statRes$res[[sigMetric]] < sigCutoff & absLogFC >= logFC)
         if (nGroups == 2) {
-            data = cbind(data, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR, Log2Fold = resLogFC)
+            exprs = cbind(exprs, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR, Log2Fold = resLogFC)
         } else if (nGroups > 2) {
-            data = cbind(data, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR)
-            data = cbind(data, resLogFC)
+            exprs = cbind(exprs, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR)
+            exprs = cbind(exprs, resLogFC)
         }
-        data = data[rowInd, ]
-        data = data[order(data$`p-value`), ]
+        exprs = exprs[rowInd, ]
+        exprs = exprs[order(exprs$`p-value`), ]
         
         # Organize a dataset for downloading
-        colInd = max(grep("sig[0-9]{3}", colnames(rawData))) # Last column index for reporters
-        rawData = rawData[, 1:colInd] # Remove statistical analysis results from jump -q
+        colInd = max(grep("sig[0-9]{3}", colnames(dfRaw))) # Last column index for reporters
+        dfRaw = dfRaw[, 1:colInd] # Remove statistical analysis results from jump -q
         if (nGroups == 2) {
-            rawData = cbind(rawData, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR, Log2Fold = resLogFC)
+            dfRaw = cbind(dfRaw, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR, Log2Fold = resLogFC)
         } else if (nGroups > 2) {
-            rawData = cbind(rawData, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR)
-            rawData = cbind(rawData, resLogFC)
+            dfRaw = cbind(dfRaw, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR)
+            dfRaw = cbind(dfRaw, resLogFC)
         }
-        rawData = rawData[rowInd, ]
-        return (list(rawData = rawData, data = data))
+        dfRaw = dfRaw[rowInd, ]
+        return (list(rawData = dfRaw, data = exprs))
     })
     
     # Volcano plot of differential expression analysis ("statRes" is directly used)
     output$volcanoPlot = renderPlotly({
         # Preparation of the statistical testing result for visualization
         res = statRes()$res
+        
+        # Check the number of groups for comparison, and move forward to the volcano plot
+        validate(need(dim(res)[2] == 3, "Volcano plot is not available for more than two groups"))
         logFC = input$logfc2
         sigMetric = input$metric2
         sigCutoff = input$cutoff2
         if (sigMetric == "p-value") {
             # res = res[, 2:3]
-            res[, 4] = NULL
+            res[, 3] = NULL
             ylab = "-log10(p-value)"
         } else if (sigMetric == "FDR") {
             # res = res[, c(2, 4)]
-            res[, 3] = NULL
+            res[, 2] = NULL
             ylab = "-log10(FDR)"
         }
-        colnames(res) = c("id", "logfc", "significance")
-        # res[, 2] = -log10(res[, 2])
+        colnames(res) = c("logfc", "significance")
         xlab = "log2(fold-change)"
         xmin = min(res$logfc)
         xmax = max(res$logfc)
         ymin = 0
         ymax = max(-log10(res$significance))
         
-        # # Parameter setup for ggplot
-        # ratioDisplay = 4/3
-        # ratioValue = (max(res[, 1]) - min(res[, 1])) / (max(res[, 2]) - min(res[, 2]))
-        # v = ggplot(data = res, aes(logfc, significance)) +
-        #     geom_point(alpha = 0.2, size = 2) +
-        #     geom_hline(aes(yintercept = -log10(sigCutoff))) +
-        #     geom_vline(aes(xintercept = -logFC)) +
-        #     geom_vline(aes(xintercept = logFC)) +
-        #     labs(x = xlab, y = ylab) +
-        #     coord_fixed(ratioValue / ratioDisplay) +
-        #     theme(text = element_text(size = 20))
-        # plot(v)
-        
-        fig = plot_ly(data = res)
+        # Volcano plot using plotly
+        fig = plot_ly(res)
         fig = fig %>% add_trace(x = ~logfc, y = ~significance,
-                                text = res[, 1],
+                                text = rownames(res),
                                 type = "scatter", 
                                 mode = "markers",
                                 marker = list(size = 5, color = 'rgb(50, 50, 50)', opacity = 0.5),
@@ -424,7 +429,7 @@ server = function (input, output, session) {
                                                       "<br>Log2fold: %{x:.4f}", 
                                                       "<br>sig. level: %{y}<extra></extra>"),
                                 showlegend = FALSE
-                                )
+        )
         fig = fig %>% add_segments(x = -logFC, xend = -logFC, y = ymin, yend = ymax, 
                                    line = list(dash = "dash", color = "black"),
                                    showlegend = FALSE)

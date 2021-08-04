@@ -5,19 +5,14 @@ library(limma)
 ## Subroutines  ##
 ##################
 limmaTest <- function(data, level, samples, comparison, comparisonNames, design, contMatrix) {
-    subData = log(data[, which(colnames(data) %in% samples)], 2)
+    subData = data[, which(colnames(data) %in% samples)]
     nGroups = length(comparison)
     fit = lmFit(subData, design) ## Log2-transformation
     fit = contrasts.fit(fit, contMatrix)
     fit = eBayes(fit)
-    if (level == "peptide") {
-        elemList = data[, 1]
-    } else if (level == "protein") {
-        elemList = data[, 2]
-    }
-    rownames(subData) = elemList
-    result = topTable(fit, genelist = elemList, n = nrow(data), sort = "none")
-    ## Change column names of the result table
+    result = topTable(fit, n = nrow(data), sort = "none")
+
+    # Change column names of the result table
     if (nGroups == 2) {
         colnames(result)[which(names(result) == "logFC")] = paste("Log2Fold(", comparisonNames, ")", sep = "")
     } else if (nGroups > 2) {
@@ -33,25 +28,25 @@ limmaTest <- function(data, level, samples, comparison, comparisonNames, design,
     colnames(result)[which(names(result) == "P.Value")] = "p-value"
     colnames(result)[which(names(result) == "adj.P.Value")] = "FDR"
     colnames(result)[which(names(result) == "adj.P.Val")] = "FDR"
-    colnames(result)[1] = level
+    
     return (list(res = result, data = subData))
 }
 
 ## From isobar package
 fitCauchy <- function(x) {
-    cauchy.fit <- function(theta,x){
-        -sum(dcauchy(x,location=theta[1],scale=theta[2],log=TRUE),na.rm=T)
+    cauchy.fit <- function(theta, x){
+        -sum(dcauchy(x, location = theta[1], scale = theta[2], log = TRUE), na.rm = T)
     }
     good <- !is.na(x) & !is.nan(x)
     x = x[good]
     x = x[x > quantile(x, 0.25) & x < quantile(x, 0.75)]
-    theta.start <- c(median(x),IQR(x)/2)
-    res <- nlminb(theta.start,cauchy.fit, x = x,lower=c(-10,1e-20),upper=c(10,10))
+    theta.start <- c(median(x), IQR(x)/2)
+    res <- nlminb(theta.start,cauchy.fit, x = x, lower = c(-10, 1e-20), upper = c(10, 10))
 }
 
 cauchyTest <- function(data, level, comparison, comparisonNames) {
-    ## Assumption: there are only two groups, i.e. two reporters
-    subData = log(data[, which(colnames(data) %in% comparison)], 2)
+    # Assumption: there are only two groups, i.e. two reporters
+    subData = data[, which(colnames(data) %in% comparison)]
     log2FC = subData[, 1] - subData[, 2] ## Log2-trasnformed data
     fit = fitCauchy(log2FC)
     pval = sapply(log2FC, function(r) {
@@ -61,14 +56,9 @@ cauchyTest <- function(data, level, comparison, comparisonNames) {
     })
     pval = 2 * pval
     fdr = p.adjust(pval, method = "BH")
-    if (level == "peptide") {
-        elemList = data[, 1]
-    } else if (level == "protein") {
-        elemList = data[, 2]
-    }
-    rownames(subData) = elemList
     result = data.frame(cbind(log2FC, pval, fdr))
     colnames(result) = c(paste0("Log2Fold_", comparisonNames), "p-value", "FDR")
+
     return (list(res = result, data = subData))
 }
 

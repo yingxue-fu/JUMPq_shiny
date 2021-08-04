@@ -10,18 +10,24 @@ preprocess = function(df, level, metric, pct) {
     } else if (level == "protein") {
         entry = df[, 2]
     }
-    
-    # CV or MAD calcuation is based on log2-transformed intensities, but output format is raw-intensity scale
+
     colInd = grep("sig", colnames(df))
     exprs = log(df[, colInd], 2)
-    cv = apply(exprs, 1, sd) / rowMeans(exprs)
-    mad = apply(abs(exprs - apply(exprs, 1, median)), 1, median)
-    threshold = as.numeric(pct)/ 100 ## Threshold percentage
-    rowInd = NULL
-    if (as.numeric(metric) == 1) {
-        rowInd = cv > quantile(cv, prob = 1 - threshold)
-    } else if (as.numeric(metric) == 2) {
-        rowInd = mad > quantile(mad, prob = 1 - threshold)
+    if (!is.null(metric) & !is.null(pct)) {
+        # For exploratory analysis
+        # CV or MAD calcuation is based on log2-transformed intensities, but output format is raw-intensity scale
+        cv = apply(exprs, 1, sd) / rowMeans(exprs)
+        mad = apply(abs(exprs - apply(exprs, 1, median)), 1, median)
+        threshold = as.numeric(pct)/ 100 ## Threshold percentage
+        rowInd = NULL
+        if (as.numeric(metric) == 1) {
+            rowInd = cv > quantile(cv, prob = 1 - threshold)
+        } else if (as.numeric(metric) == 2) {
+            rowInd = mad > quantile(mad, prob = 1 - threshold)
+        }
+    } else {
+        # For DE analysis
+        rowInd = c(1: nrow(exprs))
     }
     
     # Organize a dataset for subsequent analyses
@@ -35,5 +41,5 @@ preprocess = function(df, level, metric, pct) {
     colInd = max(grep("sig", colnames(df)))
     df = df[, 1:colInd] ## Remove statistical analysis results from previous jump -q
     df = df[rowInd, ]
-    return (list(rawData = df, data = res))
+    return (list(rawData = df, data = res, level = level))
 }
