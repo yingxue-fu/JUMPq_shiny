@@ -1,0 +1,14 @@
+name: jump_q_2
+title: jump_q_2
+username: jcho
+account: jcho
+server: svlprshiny01.stjude.org
+hostUrl: https://svlprshiny01.stjude.org/__api__
+appId: 18
+bundleId: 41
+url: https://svlprshiny01.stjude.org/content/18/
+when: 1628111156.94567
+lastSyncTime: 1628111156.94567
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: id_uni_pep_quan.xlsx|id_uni_prot_quan.txt|id_uni_prot_quan.xlsx|old/heatmaplyTest.R|old/server.R|old/ui.R|preprocess.R|sampleInfo.txt|server.R|statTest.R|test.R|ui.R|www/styles.css

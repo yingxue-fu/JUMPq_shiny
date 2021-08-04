@@ -38,7 +38,6 @@ fluidPage(
                              column(2, uiOutput("pcaOpacity"))
                     ),
                     tabPanel("Heatmap of the subset of peptides/proteins", br(), align = "center",
-                             # column(9, plotlyOutput("hclustPlot", height = "700px", width = "500px")),
                              column(9, plotOutput("hclustPlot", height = "650px", width = "500px")),
                              column(3, uiOutput("hClusterColumn"),
                                     uiOutput("hClusterTA"),
@@ -73,8 +72,6 @@ fluidPage(
                     br(),
                     fileInput("inputFile2", label = HTML("Choose a file<h5>id_uni_pep_quan.xlsx or id_uni_prot_quan.xlsx</h5>")),
                     fileInput("metaFile2", label = HTML("Choose a file<h5>upload a file containing sample information (tab-delimited txt)</h5>")),
-                    # numericInput("numGroups2", label = "Number of groups", value = 2),
-                    # uiOutput("groups2"),
                     uiOutput("groups2"),
                     selectInput("metric2", label = "Select the measure of significance", choice = list("p-value" = "p-value", "FDR" = "FDR"), selected = 1),
                     numericInput("cutoff2", label = "Significance level", min = 0, max = 1, step = 0.01, value = 0.05),
@@ -89,12 +86,9 @@ fluidPage(
                     id = "DE",
                     tabPanel("Volcano plot", br(),
                              plotlyOutput("volcanoPlot", height = "500px", width = "700px")
-                        # conditionalPanel("input.numGroups2 == 2", plotlyOutput("volcanoPlot", height = "500px", width = "700px")),
-                        # conditionalPanel("input.numGroups2 > 2", h5("Volcano plot is not available for more than two groups"))
                     ),
                     tabPanel("Heatmap of differentially expressed peptides/proteins", br(), 
                              align = "center", 
-                             # plotOutput("hclustDE", height = "700px", width = "500px"),
                              column(9, plotOutput("hclustDE", height = "650px", width = "500px")),
                              column(3, uiOutput("hClusterColumn2"),
                                     uiOutput("hClusterDistance2"),
