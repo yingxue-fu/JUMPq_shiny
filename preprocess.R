@@ -15,15 +15,15 @@ preprocess = function(df, level, metric, pct) {
     exprs = log(df[, colInd], 2)
     if (!is.null(metric) & !is.null(pct)) {
         # For exploratory analysis
-        # CV or MAD calcuation is based on log2-transformed intensities, but output format is raw-intensity scale
-        cv = apply(exprs, 1, sd) / rowMeans(exprs)
-        mad = apply(abs(exprs - apply(exprs, 1, median)), 1, median)
+        # CV or MAD calculation is based on log2-transformed intensities, but output format is raw-intensity scale
+        cv = apply(exprs, 1, sd, na.rm = T) / rowMeans(exprs, na.rm = T)
+        mad = apply(abs(exprs - apply(exprs, 1, median, na.rm = T)), 1, median, na.rm = T)
         threshold = as.numeric(pct)/ 100 ## Threshold percentage
         rowInd = NULL
         if (as.numeric(metric) == 1) {
-            rowInd = cv > quantile(cv, prob = 1 - threshold)
+            rowInd = cv > quantile(cv, prob = 1 - threshold, na.rm = T)
         } else if (as.numeric(metric) == 2) {
-            rowInd = mad > quantile(mad, prob = 1 - threshold)
+            rowInd = mad > quantile(mad, prob = 1 - threshold, na.rm = T)
         }
     } else {
         # For DE analysis

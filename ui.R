@@ -38,7 +38,7 @@ fluidPage(
                              column(2, uiOutput("pcaOpacity"))
                     ),
                     tabPanel("Heatmap of the subset of peptides/proteins", br(), align = "center",
-                             column(9, plotOutput("hclustPlot", height = "650px", width = "500px")),
+                             column(9, plotOutput("hclustPlot", height = "650px", width = "600px")),
                              column(3, uiOutput("hClusterColumn"),
                                     uiOutput("hClusterTA"),
                                     uiOutput("hClusterDistance"),
@@ -89,7 +89,7 @@ fluidPage(
                     ),
                     tabPanel("Heatmap of differentially expressed peptides/proteins", br(), 
                              align = "center", 
-                             column(9, plotOutput("hclustDE", height = "650px", width = "500px")),
+                             column(9, plotOutput("hclustDE", height = "650px", width = "600px")),
                              column(3, uiOutput("hClusterColumn2"),
                                     uiOutput("hClusterDistance2"),
                                     uiOutput("hClusterMethod2"),

@@ -26,10 +26,10 @@ server = function (input, output, session) {
     data1 = reactive ({
         inFileName = input$inputFile1$name
         if (length(grep("pep", inFileName))) {
-            tbl = read_excel(input$inputFile1$datapath, skip = 4) # Peptide publication table
+            tbl = read_excel(input$inputFile1$datapath, skip = 4, na = "NA") # Peptide publication table
             level = "peptide"
         } else {
-            tbl = read_excel(input$inputFile1$datapath, skip = 1) # Protein publication table
+            tbl = read_excel(input$inputFile1$datapath, skip = 1, na = "NA") # Protein publication table
             level = "protein"
         }
         list(data = as.data.frame(tbl), level = level)
@@ -64,7 +64,7 @@ server = function (input, output, session) {
         # Data processing
         df = subData1()$data
         dfSample = subData1()$sampleInfo
-        res = prcomp(t(df), center = TRUE, scale = TRUE)
+        res = prcomp(t(na.omit(df)), center = TRUE, scale = TRUE)
         eigs = res$sdev ^ 2
         res = data.frame(res$x[, 1:2])
         xlab = paste0("PC1 (", round((eigs[1] / sum(eigs)) * 100, 2),"%)")
@@ -144,7 +144,7 @@ server = function (input, output, session) {
         mat = t(scale(t(mat), center = T, scale = T))
         
         # Heatmap options
-        limVal = round(min(abs(min(mat)), abs(max(mat))))
+        limVal = round(min(abs(min(mat, na.rm = T)), abs(max(mat, na.rm = T))))
         myColor = colorRamp2(c(-limVal, 0, limVal), c("blue", "white", "red"), space = "RGB")
         clusterColumns = T
         if (!is.null(input$hClusterColumn)) {
@@ -155,7 +155,16 @@ server = function (input, output, session) {
         topAnnot = NULL
         if (!is.null(input$hClusterTA)) {
             if (input$hClusterTA != "None") {
-                topAnnot = HeatmapAnnotation(sample_information = dfSample[[input$hClusterTA]], name = input$hClusterTA)
+                labels = dfSample[[input$hClusterTA]]
+                if (length(unique(labels)) > 2) {
+                    pal = brewer.pal(n = length(unique(labels)), name = "Set1")
+                    colVector = list(sample_information = setNames(pal, unique(labels)))
+                } else {
+                    colVector = list(sample_information = setNames(c("red", "blue"), unique(labels)))
+                }
+                topAnnot = HeatmapAnnotation(sample_information = labels, 
+                                             col = colVector,
+                                             name = input$hClusterTA)
             }
         }
         clusterDistance = "euclidean"
@@ -292,10 +301,10 @@ server = function (input, output, session) {
     rawData2 = reactive ({
         inFileName = input$inputFile2$name
         if (length(grep("pep", inFileName))) {
-            tbl = read_excel(input$inputFile2$datapath, skip = 4) # Peptide publication table
+            tbl = read_excel(input$inputFile2$datapath, skip = 4, na = "NA") # Peptide publication table
             level = "peptide"
         } else {
-            tbl = read_excel(input$inputFile2$datapath, skip = 1) # Protein publication table
+            tbl = read_excel(input$inputFile2$datapath, skip = 1, na = "NA") # Protein publication table
             level = "protein"
         }
         list(data = as.data.frame(tbl), level = level)
@@ -392,7 +401,7 @@ server = function (input, output, session) {
             dfRaw = cbind(dfRaw, resLogFC)
         }
         dfRaw = dfRaw[rowInd, ]
-        return (list(rawData = dfRaw, data = exprs))
+        return (list(rawData = dfRaw, sampleInfo = dfSample, data = exprs))
     })
     
     # Volcano plot of differential expression analysis ("statRes" is directly used)
@@ -442,20 +451,23 @@ server = function (input, output, session) {
         fig = fig %>% add_segments(x = xmin, xend = xmax, y = sigCutoff, yend = sigCutoff, 
                                    line = list(dash = "dash", color = "black"),
                                    showlegend = FALSE)
-        fig = fig %>% layout(yaxis = list(type = "log", autorange = "reversed", tickformat = ".2e"),
+        fig = fig %>% layout(yaxis = list(type = "log", autorange = "reversed", tickformat = ".2e",
+                                          linecolor = "black", linewidth = 0.5, ticks = "outside", mirror = TRUE),
+                             xaxis = list(linecolor = "black", linewidth = 0.5, ticks = "outside", mirror = TRUE),
                              showlegend = FALSE)
     })
     
     # Heatmap of differentially expressed peptides/proteins (differentially expressed elements selected by "statRes" should be used)
     output$hclustDE = renderPlot({
         data = subData2()$data
+        dfSample = subData2()$sampleInfo
         colInd = grep('^sig[0-9]{3}', colnames(data))
         data = data[, colInd]
         mat = as.matrix(data)
         mat = t(scale(t(mat), center = T, scale = F)) # Only mean-centering
         
         # Heatmap options
-        limVal = round(min(abs(min(mat)), abs(max(mat))))
+        limVal = round(min(abs(min(mat, na.rm = T)), abs(max(mat, na.rm = T))))
         myColor = colorRamp2(c(-limVal, 0, limVal), c("blue", "white", "red"), space = "RGB")
         clusterColumns = T
         if (!is.null(input$hClusterColumn2)) {
@@ -483,7 +495,16 @@ server = function (input, output, session) {
                 colSplit = input$hClusterColumns2
             }
         }
-        
+        labels = dfSample[[input$groups2]]
+        if (length(unique(labels)) > 2) {
+            pal = brewer.pal(n = length(unique(labels)), name = "Set1")
+            colVector = list(sample_information = setNames(pal, unique(labels)))
+        } else {
+            colVector = list(sample_information = setNames(c("red", "blue"), unique(labels)))
+        }
+        topAnnot = HeatmapAnnotation(sample_information = dfSample[[input$groups2]],
+                                     col = colVector,
+                                     name = input$groups2)
         ht = Heatmap(mat,
                      col = myColor,
                      cluster_columns = clusterColumns,
@@ -496,6 +517,7 @@ server = function (input, output, session) {
                      border = T,
                      row_split = rowSplit,
                      column_split = colSplit,
+                     top_annotation = topAnnot,
                      heatmap_legend_param = list(
                          title = "Scaled intensity",
                          legend_height = unit(5, "cm"),
