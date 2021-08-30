@@ -6,6 +6,7 @@ library(ggplot2)
 library(plotly)
 library(ComplexHeatmap)
 library(circlize)
+library(RColorBrewer)
 library(DT)
 library(curl)
 
@@ -448,12 +449,14 @@ server = function (input, output, session) {
         fig = fig %>% add_segments(x = logFC, xend = logFC, y = ymin, yend = ymax, 
                                    line = list(dash = "dash", color = "black"),
                                    showlegend = FALSE)
-        fig = fig %>% add_segments(x = xmin, xend = xmax, y = sigCutoff, yend = sigCutoff, 
+        fig = fig %>% add_segments(x = xmin - 0.5, xend = xmax + 0.5, y = sigCutoff, yend = sigCutoff, 
                                    line = list(dash = "dash", color = "black"),
                                    showlegend = FALSE)
-        fig = fig %>% layout(yaxis = list(type = "log", autorange = "reversed", tickformat = ".2e",
+        fig = fig %>% layout(yaxis = list(type = "log", tickformat = ".2e",
+                                          autorange = "reversed",
                                           linecolor = "black", linewidth = 0.5, ticks = "outside", mirror = TRUE),
-                             xaxis = list(linecolor = "black", linewidth = 0.5, ticks = "outside", mirror = TRUE),
+                             xaxis = list(range = c(xmin - 0.5, xmax + 0.5),
+                                          linecolor = "black", linewidth = 0.5, ticks = "outside", mirror = TRUE),
                              showlegend = FALSE)
     })
     
