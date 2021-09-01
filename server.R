@@ -112,7 +112,7 @@ server = function (input, output, session) {
     observeEvent(input$submit1, {
         output$pcaPointColor = renderUI({
             df = metaData1()
-            vars = setdiff(colnames(df), "ID")
+            vars = colnames(df)[2: ncol(df)]
             vars = c("None", vars)
             selectInput("pcaPointColor", "Color mapping variable",
                         choices = vars, selected = "None")
@@ -157,8 +157,12 @@ server = function (input, output, session) {
         if (!is.null(input$hClusterTA)) {
             if (input$hClusterTA != "None") {
                 labels = dfSample[[input$hClusterTA]]
-                if (length(unique(labels)) > 2) {
-                    pal = brewer.pal(n = length(unique(labels)), name = "Set1")
+                nLabels = length(unique(labels))
+                if (nLabels > 9) {
+                    pal = colorRampPalette(brewer.pal(9, "Set1"))(nLabels)
+                    colVector = list(sample_information = setNames(pal, unique(labels)))
+                } else if (nLabels > 2 & nLabels < 9) {
+                    pal = brewer.pal(n = nLabels, name = "Set1")
                     colVector = list(sample_information = setNames(pal, unique(labels)))
                 } else {
                     colVector = list(sample_information = setNames(c("red", "blue"), unique(labels)))
@@ -221,7 +225,7 @@ server = function (input, output, session) {
         })
         output$hClusterTA = renderUI({
             df = metaData1()
-            vars = setdiff(colnames(df), "ID")
+            vars = colnames(df)[2: ncol(df)]
             vars = c("None", vars)
             selectInput("hClusterTA", "Column annotation variable",
                         choices = vars,
@@ -323,10 +327,14 @@ server = function (input, output, session) {
         }
     })
     
-    # Specificiation of groups of samples
+    # Specification of groups of samples
     output$groups2 = renderUI({
         df = metaData2()
-        vars = setdiff(colnames(df), "ID")
+        if (is.null(colnames(df))) {
+            vars = NULL
+        } else {
+            vars = colnames(df)[2: ncol(df)]    
+        }
         vars = c("None", vars)
         selectInput("groups2", "Grouping variable",
                     choices = vars, selected = vars[1])
@@ -356,7 +364,8 @@ server = function (input, output, session) {
         nGroups = length(factors)
         for (g in 1:nGroups) {
             groupName = paste0("Group", g)
-            comparison[g] = paste(dfSample$ID[dfSample[[input$groups2]] == factors[g]], collapse = ",")
+            #comparison[g] = paste(dfSample$ID[dfSample[[input$groups2]] == factors[g]], collapse = ",")
+            comparison[g] = paste(dfSample[dfSample[[input$groups2]] == factors[g], 1], collapse = ",")
         }
         statTest(df, level, comparison)
     })
@@ -499,8 +508,18 @@ server = function (input, output, session) {
             }
         }
         labels = dfSample[[input$groups2]]
-        if (length(unique(labels)) > 2) {
-            pal = brewer.pal(n = length(unique(labels)), name = "Set1")
+        # if (length(unique(labels)) > 2) {
+        #     pal = brewer.pal(n = length(unique(labels)), name = "Set1")
+        #     colVector = list(sample_information = setNames(pal, unique(labels)))
+        # } else {
+        #     colVector = list(sample_information = setNames(c("red", "blue"), unique(labels)))
+        # }
+        nLabels = length(unique(labels))
+        if (nLabels > 9) {
+            pal = colorRampPalette(brewer.pal(9, "Set1"))(nLabels)
+            colVector = list(sample_information = setNames(pal, unique(labels)))
+        } else if (nLabels > 2 & nLabels < 9) {
+            pal = brewer.pal(n = nLabels, name = "Set1")
             colVector = list(sample_information = setNames(pal, unique(labels)))
         } else {
             colVector = list(sample_information = setNames(c("red", "blue"), unique(labels)))
