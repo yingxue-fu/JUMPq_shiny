@@ -321,7 +321,8 @@ server = function (input, output, session) {
     # Column 2~: Any column name is possible, and sample information can be put as text
     metaData2 = reactive ({
         if (!is.null(input$metaFile2)) {
-            read.table(input$metaFile2$datapath, sep="\t", header=T)
+            # read.table(input$metaFile2$datapath, sep="\t", header=T)
+            read.table(input$metaFile2$datapath, sep="\t", header=T, na.strings=c("", "NA", "NaN", "na"))
         } else {
             NULL
         }
@@ -360,12 +361,17 @@ server = function (input, output, session) {
 
         # Preparation of a statistical testing
         comparison = as.character()
-        factors = unique(dfSample[[input$groups2]])
+        # factors = unique(dfSample[[input$groups2]])
+        factors = dfSample[[input$groups2]]
+        factors = unique(factors[!is.na(factors)])
         nGroups = length(factors)
         for (g in 1:nGroups) {
             groupName = paste0("Group", g)
-            #comparison[g] = paste(dfSample$ID[dfSample[[input$groups2]] == factors[g]], collapse = ",")
-            comparison[g] = paste(dfSample[dfSample[[input$groups2]] == factors[g], 1], collapse = ",")
+            #comparison[g] = paste(dfSample$ID[dfSample[[input$groups2]] == factors[g]], collapse = ",")    # Oldest version
+            # comparison[g] = paste(dfSample[dfSample[[input$groups2]] == factors[g], 1], collapse = ",")
+            cc = dfSample[dfSample[[input$groups2]] == factors[g], 1]
+            cc = cc[!is.na(cc)]
+            comparison[g] = paste(cc, collapse = ",")
         }
         statTest(df, level, comparison)
     })
@@ -376,8 +382,12 @@ server = function (input, output, session) {
         statRes = statRes()
         dfRaw = data2()$rawData
         exprs = statRes$data
+        sampleLabels = colnames(exprs)
         dfSample = data2()$sampleInfo
-        nGroups = length(unique(dfSample[[input$groups2]]))
+        # nGroups = length(unique(dfSample[[input$groups2]]))
+        groupLabels = dfSample[[input$groups2]]
+        groupLabels = groupLabels[!is.na(groupLabels)]
+        nGroups = length(unique(groupLabels))
         
         # Handle threshold inputs
         logFC = input$logfc2
@@ -402,8 +412,10 @@ server = function (input, output, session) {
         exprs = exprs[order(exprs$`p-value`), ]
         
         # Organize a dataset for downloading
-        colInd = max(grep("sig[0-9]{3}", colnames(dfRaw))) # Last column index for reporters
-        dfRaw = dfRaw[, 1:colInd] # Remove statistical analysis results from jump -q
+        # colInd = max(grep("sig[0-9]{3}", colnames(dfRaw))) # Last column index for reporters
+        # dfRaw = dfRaw[, 1:colInd] # Remove statistical analysis results from jump -q
+        colInd = colnames(dfRaw) %in% sampleLabels
+        dfRaw = dfRaw[, colInd]
         if (nGroups == 2) {
             dfRaw = cbind(dfRaw, `p-value` = statRes$res$`p-value`, FDR = statRes$res$FDR, Log2Fold = resLogFC)
         } else if (nGroups > 2) {
@@ -508,6 +520,7 @@ server = function (input, output, session) {
             }
         }
         labels = dfSample[[input$groups2]]
+        labels = labels[!is.na(labels)]
         # if (length(unique(labels)) > 2) {
         #     pal = brewer.pal(n = length(unique(labels)), name = "Set1")
         #     colVector = list(sample_information = setNames(pal, unique(labels)))
@@ -524,7 +537,7 @@ server = function (input, output, session) {
         } else {
             colVector = list(sample_information = setNames(c("red", "blue"), unique(labels)))
         }
-        topAnnot = HeatmapAnnotation(sample_information = dfSample[[input$groups2]],
+        topAnnot = HeatmapAnnotation(sample_information = labels, # dfSample[[input$groups2]],
                                      col = colVector,
                                      name = input$groups2)
         ht = Heatmap(mat,
