@@ -61,13 +61,22 @@ server = function (input, output, session) {
     ############
     # PCA plot #
     ############
+    PCAres = reactive({
+      # Data processing
+      df = subData1()$data
+      res = prcomp(t(na.omit(df)), center = TRUE, scale = TRUE)
+      PC_vars = res$sdev ^ 2
+      PC_coord = data.frame(res$x[, 1:2])
+      return (list(PC_Vars = PC_vars, PC_Coord = PC_coord))
+    })
+    
+    
     output$pcaPlot = renderScatterD3({
-        # Data processing
-        df = subData1()$data
+      
         dfSample = subData1()$sampleInfo
-        res = prcomp(t(na.omit(df)), center = TRUE, scale = TRUE)
-        eigs = res$sdev ^ 2
-        res = data.frame(res$x[, 1:2])
+        eigs = PCAres()$PC_Vars
+        res = PCAres()$PC_Coord
+        
         xlab = paste0("PC1 (", round((eigs[1] / sum(eigs)) * 100, 2),"%)")
         ylab = paste0("PC2 (", round((eigs[2] / sum(eigs)) * 100, 2),"%)")
         
@@ -106,6 +115,7 @@ server = function (input, output, session) {
                   transitions = TRUE,
                   left_margin = 50,
                   lasso = TRUE)
+
     })
     
     # Control panel of the PCA plot
@@ -132,6 +142,13 @@ server = function (input, output, session) {
             sliderInput("pcaPointOpacity", "Point opacity",
                         min = 0, max = 1, step = 0.1, value = 1)
         })
+        # download PC1/2 coordinates
+        output$downloadPCA = downloadHandler(
+          filename = "PC1_2_Coordinates.csv",
+          content = function(file) {
+            write.csv(PCAres()$PC_Coord, file, row.names = TRUE)
+          }
+        )
     })
     
     ##########################

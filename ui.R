@@ -30,12 +30,14 @@ fluidPage(
             mainPanel(
                 tabsetPanel(
                     tabPanel("Principal component analysis (PCA)", br(),
-                             scatterD3Output("pcaPlot", height = "400px", width = "700px"),
+                             scatterD3Output("pcaPlot", height = "400px", width = "650px"),
                              br(),
-                             column(2, offset = 1, uiOutput("pcaPointColor")),
+                             column(2, offset = 0, uiOutput("pcaPointColor")),
                              column(2, uiOutput("pcaPointSize")),
                              column(2, uiOutput("pcaLabelSize"), uiOutput("pcaHideLabel")),
-                             column(2, uiOutput("pcaOpacity"))
+                             column(2, uiOutput("pcaOpacity")),
+                             br(),
+                             column(2, downloadButton("downloadPCA", "Download PC1/2 coordinates"))
                     ),
                     tabPanel("Heatmap of the subset of peptides/proteins", br(), align = "center",
                              column(9, plotOutput("hclustPlot", height = "650px", width = "600px")),
